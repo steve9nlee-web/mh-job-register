@@ -19,13 +19,23 @@
  * paid | createdBy | rawMessage
  */
 
+// The Job Register spreadsheet ("MH Contractors Database"). All app data is
+// stored here. When this script is pasted inside that spreadsheet the ID is
+// redundant but harmless; it also lets the script run as a standalone project.
+var SPREADSHEET_ID = '11htg51uUpOA2nH2xmR3apRA7nN-7Dn8HSy_KDn4Bl7k';
+
 var SHEET_NAME = 'JobRegister';
 var HEADERS = ['id', 'date', 'unit', 'category', 'description', 'status',
   'needsReview', 'reviewReason', 'remarks', 'customerCharge',
   'contractorPayable', 'invoiced', 'paid', 'createdBy', 'rawMessage'];
 
 function getSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss;
+  try {
+    ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  } catch (e) {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+  }
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);

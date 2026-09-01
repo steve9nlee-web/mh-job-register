@@ -18,8 +18,9 @@ row is exactly these headers:
 id  date  unit  category  description  status  needsReview  reviewReason  remarks  customerCharge  contractorPayable  invoiced  paid  createdBy  rawMessage
 ```
 
-(If you already ran the Apps Script backend, that tab already exists — reuse it.)
-Copy the spreadsheet ID from its URL (the long string between `/d/` and `/edit`).
+(If you already ran the Apps Script backend, that tab already exists — reuse
+it. The workflows are pre-configured for the "MH Contractors Database"
+spreadsheet.)
 
 ## 2. Import the workflows
 
@@ -28,8 +29,10 @@ In n8n: **Workflows → Import from File** for each of the three JSON files.
 ## 3. Set credentials & placeholders
 
 - **Google Sheets**: open each Google Sheets node → select/create a
-  *Google Sheets OAuth2* credential → replace `REPLACE_WITH_SPREADSHEET_ID`
-  with your spreadsheet ID (or switch the field to "From list" and pick it).
+  *Google Sheets OAuth2* credential. The nodes are already pointed at the
+  "MH Contractors Database" spreadsheet
+  (ID `11htg51uUpOA2nH2xmR3apRA7nN-7Dn8HSy_KDn4Bl7k`); change the Document ID
+  only if you switch to a different spreadsheet.
 - **Claude (intake workflow only)**: open the *AI Convert (Claude)* node →
   create a **Header Auth** credential with name `x-api-key` and value = your
   Anthropic API key (get one at console.anthropic.com). The workflow uses the
