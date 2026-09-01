@@ -55,7 +55,7 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                     value = rawText,
                     onValueChange = { rawText = it },
                     modifier = Modifier.fillMaxWidth().height(160.dp),
-                    placeholder = { Text("e.g.\n12/8 unit A-12-03 cleaning done\nB-05-11 sink leaking, plumber tmr") }
+                    placeholder = { Text("e.g.\n12/8 PV-12-03 cleaning done\nR-5-11 sink leaking, plumber tmr") }
                 )
                 Spacer(Modifier.height(8.dp))
                 Row {

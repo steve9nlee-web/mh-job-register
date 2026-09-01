@@ -19,11 +19,41 @@ object MessageParser {
 
     data class ParseResult(val job: Job)
 
-    private val unitRegexes = listOf(
-        Regex("""\b(?:unit|rumah|house|blk|block)\s*[:#]?\s*([A-Za-z]?-?\d{1,3}[-/]\d{1,3}(?:[-/]\d{1,3})?)""", RegexOption.IGNORE_CASE),
-        Regex("""\b([A-Za-z]-\d{1,3}-\d{1,3})\b"""),
+    // Property prefixes: PV = Park View, R = Rubica, OV = Ocean View,
+    // L = Luminari — always followed by -Floor-Unit (e.g. PV-12-03).
+    private val prefixedUnitRegex =
+        Regex("""\b(PV|OV|R|L)\s*[-/ ]?\s*(\d{1,3})\s*[-/]\s*(\d{1,3})\b""", RegexOption.IGNORE_CASE)
+
+    // Full property names also accepted: "Park View 12-03" -> PV-12-03
+    private val namedUnitRegex =
+        Regex("""\b(park\s?view|rubica|ocean\s?view|luminari)\s*[:#]?\s*(\d{1,3})\s*[-/]\s*(\d{1,3})\b""", RegexOption.IGNORE_CASE)
+
+    private fun prefixFor(name: String): String = when {
+        name.startsWith("park", ignoreCase = true) -> "PV"
+        name.startsWith("ocean", ignoreCase = true) -> "OV"
+        name.startsWith("rubica", ignoreCase = true) -> "R"
+        else -> "L"
+    }
+
+    private val fallbackUnitRegexes = listOf(
+        Regex("""\b(?:unit|rumah|house|blk|block)\s*[:#]?\s*([A-Za-z]{0,2}-?\d{1,3}[-/]\d{1,3}(?:[-/]\d{1,3})?)""", RegexOption.IGNORE_CASE),
+        Regex("""\b([A-Za-z]{1,2}-\d{1,3}-\d{1,3})\b"""),
         Regex("""\b(\d{1,3}-\d{1,3}(?:-\d{1,3})?)\b""")
     )
+
+    /** Returns normalized unit ("PV-12-03") paired with the raw matched text, or null. */
+    private fun findUnitMatch(text: String): Pair<String, String>? {
+        prefixedUnitRegex.find(text)?.let { m ->
+            return "${m.groupValues[1].uppercase()}-${m.groupValues[2]}-${m.groupValues[3]}" to m.value
+        }
+        namedUnitRegex.find(text)?.let { m ->
+            return "${prefixFor(m.groupValues[1])}-${m.groupValues[2]}-${m.groupValues[3]}" to m.value
+        }
+        for (rx in fallbackUnitRegexes) {
+            rx.find(text)?.let { m -> return m.groupValues[1].uppercase() to m.value }
+        }
+        return null
+    }
 
     // typo-tolerant keyword table per category
     private val categoryKeywords: Map<JobCategory, List<String>> = mapOf(
@@ -45,9 +75,15 @@ object MessageParser {
         val text = raw.trim()
         val lower = text.lowercase()
 
-        // 1. Normalize date
+        // 1. Identify unit number first, and remove it from the text used for
+        // date detection so "PV-12-03" is never mistaken for a date.
+        val unitMatch = findUnitMatch(text)
+        val unit = unitMatch?.first ?: ""
+        val dateSource = if (unitMatch != null) text.replace(unitMatch.second, " ") else text
+
+        // 2. Normalize date
         var date: LocalDate? = null
-        val dateMatch = Regex("""\b(\d{1,2}[/.\-]\d{1,2}(?:[/.\-]\d{2,4})?|\d{4}-\d{2}-\d{2})\b""").find(text)
+        val dateMatch = Regex("""\b(\d{1,2}[/.\-]\d{1,2}(?:[/.\-]\d{2,4})?|\d{4}-\d{2}-\d{2})\b""").find(dateSource)
         if (dateMatch != null) {
             val token = dateMatch.value
             for (fmt in dateFormats) {
@@ -73,11 +109,6 @@ object MessageParser {
                 else -> today
             }
         }
-
-        // 2. Identify unit number
-        val unit = unitRegexes.firstNotNullOfOrNull { rx ->
-            rx.find(text)?.groupValues?.get(1)
-        }?.uppercase() ?: ""
 
         // 3. Classify category (first keyword table hit wins; DEEP before CLEANING)
         val category = categoryKeywords.entries.firstOrNull { (_, words) ->

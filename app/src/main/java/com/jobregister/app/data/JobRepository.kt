@@ -124,19 +124,19 @@ class JobRepository(context: Context) {
     private fun sampleJobs(): List<Job> {
         val today = LocalDate.now()
         return listOf(
-            Job("J-SAMPLE01", today.minusDays(2).toString(), "A-12-03", JobCategory.CLEANING,
-                "Weekly cleaning unit A-12-03", JobStatus.COMPLETED,
+            Job("J-SAMPLE01", today.minusDays(2).toString(), "PV-12-03", JobCategory.CLEANING,
+                "Weekly cleaning unit PV-12-03", JobStatus.COMPLETED,
                 customerCharge = 80.0, contractorPayable = 50.0, createdBy = "Sample"),
-            Job("J-SAMPLE02", today.minusDays(1).toString(), "B-05-11", JobCategory.PLUMBING,
+            Job("J-SAMPLE02", today.minusDays(1).toString(), "R-5-11", JobCategory.PLUMBING,
                 "Kitchen sink choke, tenant reported leak", JobStatus.PENDING, createdBy = "Sample"),
             Job("J-SAMPLE03", today.minusDays(1).toString(), "", JobCategory.UNKNOWN,
                 "tmr go see the thing at corner house", JobStatus.PENDING,
                 needsReview = true, reviewReason = "Unit number not found; Category could not be classified",
                 createdBy = "Sample", rawMessage = "tmr go see the thing at corner house"),
-            Job("J-SAMPLE04", today.toString(), "C-08-02", JobCategory.AIRCON,
+            Job("J-SAMPLE04", today.toString(), "OV-8-02", JobCategory.AIRCON,
                 "Aircon service 2 units, chemical wash", JobStatus.WAITING,
                 remarks = "Waiting for parts", createdBy = "Sample"),
-            Job("J-SAMPLE05", today.minusDays(3).toString(), "A-12-03", JobCategory.GENERAL_REPAIR,
+            Job("J-SAMPLE05", today.minusDays(3).toString(), "L-3-07", JobCategory.GENERAL_REPAIR,
                 "Fix bedroom door hinge", JobStatus.COMPLETED,
                 customerCharge = 120.0, contractorPayable = 80.0, invoiced = true, createdBy = "Sample")
         )
