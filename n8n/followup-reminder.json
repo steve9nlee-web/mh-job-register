@@ -1,0 +1,76 @@
+{
+  "name": "Pending Job Follow-up (daily reminder)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 9 * * *" }
+          ]
+        }
+      },
+      "id": "c3000000-0000-4000-8000-000000000001",
+      "name": "Every day 9:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "JobRegister",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000002",
+      "name": "Read Job Register",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-180, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Jobs that are not ready for billing and older than DAYS_BEFORE_REMINDER.\nconst DAYS_BEFORE_REMINDER = 2;\nconst FOLLOW_UP_STATUSES = ['PENDING', 'WAITING', 'NOT_COMPLETED'];\n\nconst cutoff = new Date();\ncutoff.setDate(cutoff.getDate() - DAYS_BEFORE_REMINDER);\n\nconst overdue = $input.all()\n  .map((i) => i.json)\n  .filter((r) => r.id && FOLLOW_UP_STATUSES.includes(String(r.status)))\n  .filter((r) => {\n    const d = new Date(String(r.date));\n    return !isNaN(d) && d <= cutoff;\n  })\n  .sort((a, b) => String(a.date).localeCompare(String(b.date)));\n\n// No overdue jobs -> stop here, no email today.\nif (overdue.length === 0) {\n  return [];\n}\n\nconst lines = overdue.map((r) =>\n  `- ${r.date}  ${r.unit || 'Unit ?'}  [${r.category}]  ${r.status}` +\n  (r.remarks ? `  — ${r.remarks}` : '') + `\\n    ${r.description}`\n);\n\nreturn [{ json: {\n  count: overdue.length,\n  report: `${overdue.length} job(s) pending follow-up (older than ${DAYS_BEFORE_REMINDER} days):\\n\\n` + lines.join('\\n')\n} }];"
+      },
+      "id": "c3000000-0000-4000-8000-000000000003",
+      "name": "Find Overdue Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [60, 0]
+    },
+    {
+      "parameters": {
+        "sendTo": "REPLACE_WITH_YOUR_EMAIL",
+        "subject": "=Job Register: {{ $json.count }} job(s) need follow-up",
+        "emailType": "text",
+        "message": "={{ $json.report }}",
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000004",
+      "name": "Email Reminder",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [300, 0]
+    }
+  ],
+  "connections": {
+    "Every day 9:00": {
+      "main": [[{ "node": "Read Job Register", "type": "main", "index": 0 }]]
+    },
+    "Read Job Register": {
+      "main": [[{ "node": "Find Overdue Jobs", "type": "main", "index": 0 }]]
+    },
+    "Find Overdue Jobs": {
+      "main": [[{ "node": "Email Reminder", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

@@ -1,0 +1,144 @@
+{
+  "name": "Job Register API (for the 4 APKs)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "jobregister/SECRET-CHANGE-ME",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "GET jobs",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-380, -120],
+      "webhookId": "a1000000-0000-4000-8000-00000000aa01"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "JobRegister",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Read Job Register",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-140, -120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map spreadsheet rows to the JSON contract the Android apps expect:\n// GET -> { \"jobs\": [ {...}, ... ] }\nconst toBool = (v) => v === true || String(v).toLowerCase() === 'true';\nconst toNum = (v) => (v === '' || v === null || v === undefined) ? null : Number(v);\n\nconst jobs = $input.all()\n  .map((item) => item.json)\n  .filter((r) => r.id)\n  .map((r) => ({\n    id: String(r.id),\n    date: String(r.date ?? ''),\n    unit: String(r.unit ?? ''),\n    category: String(r.category ?? 'UNKNOWN'),\n    description: String(r.description ?? ''),\n    status: String(r.status ?? 'PENDING'),\n    needsReview: toBool(r.needsReview),\n    reviewReason: String(r.reviewReason ?? ''),\n    remarks: String(r.remarks ?? ''),\n    customerCharge: toNum(r.customerCharge),\n    contractorPayable: toNum(r.contractorPayable),\n    invoiced: toBool(r.invoiced),\n    paid: toBool(r.paid),\n    createdBy: String(r.createdBy ?? ''),\n    rawMessage: String(r.rawMessage ?? '')\n  }));\n\nreturn [{ json: { jobs } }];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Format Jobs JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [100, -120]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Respond with jobs",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [340, -120]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jobregister/SECRET-CHANGE-ME",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "POST job",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-380, 140],
+      "webhookId": "a1000000-0000-4000-8000-00000000aa02"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The app POSTs one job as JSON. Normalize it into one spreadsheet row.\nconst j = $json.body || {};\nif (!j.id) {\n  throw new Error('Missing job id in POST body');\n}\nconst boolCell = (v) => (v === true || String(v).toLowerCase() === 'true') ? 'TRUE' : 'FALSE';\nconst numCell = (v) => (v === null || v === undefined || v === '') ? '' : Number(v);\n\nreturn [{ json: {\n  id: String(j.id),\n  date: String(j.date ?? ''),\n  unit: String(j.unit ?? ''),\n  category: String(j.category ?? 'UNKNOWN'),\n  description: String(j.description ?? ''),\n  status: String(j.status ?? 'PENDING'),\n  needsReview: boolCell(j.needsReview),\n  reviewReason: String(j.reviewReason ?? ''),\n  remarks: String(j.remarks ?? ''),\n  customerCharge: numCell(j.customerCharge),\n  contractorPayable: numCell(j.contractorPayable),\n  invoiced: boolCell(j.invoiced),\n  paid: boolCell(j.paid),\n  createdBy: String(j.createdBy ?? ''),\n  rawMessage: String(j.rawMessage ?? '')\n} }];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Normalize Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-140, 140]
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "JobRegister",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "matchingColumns": ["id"],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Upsert Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [100, 140]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"ok\": true }",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [340, 140]
+    }
+  ],
+  "connections": {
+    "GET jobs": {
+      "main": [[{ "node": "Read Job Register", "type": "main", "index": 0 }]]
+    },
+    "Read Job Register": {
+      "main": [[{ "node": "Format Jobs JSON", "type": "main", "index": 0 }]]
+    },
+    "Format Jobs JSON": {
+      "main": [[{ "node": "Respond with jobs", "type": "main", "index": 0 }]]
+    },
+    "POST job": {
+      "main": [[{ "node": "Normalize Row", "type": "main", "index": 0 }]]
+    },
+    "Normalize Row": {
+      "main": [[{ "node": "Upsert Row", "type": "main", "index": 0 }]]
+    },
+    "Upsert Row": {
+      "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

@@ -67,6 +67,13 @@ make all phones share the same live Job Register:
 Every status change, new job, review fix, and billing update is then pushed to
 the sheet, and the sync button pulls the latest rows on any phone.
 
+## Alternative backend: n8n
+
+Prefer n8n over Apps Script? The [`n8n/`](n8n/) folder has three importable
+workflows: the same jobs API served by n8n webhooks, an AI intake flow that
+converts WhatsApp messages with Claude, and a daily pending-job reminder
+email. Setup guide: [`n8n/README.md`](n8n/README.md).
+
 ## Project layout
 
 ```
@@ -78,5 +85,6 @@ app/                     Android app (Kotlin + Jetpack Compose)
     data/                local store + Google Sheets sync
     ui/                  screens; each gated through RoleConfig
 backend/Code.gs          Google Apps Script: spreadsheet ↔ JSON API
+n8n/                     alternative backend as importable n8n workflows
 .github/workflows/       CI that builds the 4 APKs on every push
 ```
