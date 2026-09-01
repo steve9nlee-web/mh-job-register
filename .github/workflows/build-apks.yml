@@ -1,0 +1,52 @@
+name: Build role APKs
+
+on:
+  push:
+    branches:
+      - claude/multi-apk-contractor-types-joinu5
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Build all four APKs
+        run: gradle --no-daemon assembleRelease
+
+      - name: Upload Admin APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: JobRegister-Admin
+          path: app/build/outputs/apk/admin/release/*.apk
+
+      - name: Upload Cleaner APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: JobRegister-Cleaner
+          path: app/build/outputs/apk/cleaner/release/*.apk
+
+      - name: Upload Repairer APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: JobRegister-Repairer
+          path: app/build/outputs/apk/repairer/release/*.apk
+
+      - name: Upload Initiator APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: JobRegister-Initiator
+          path: app/build/outputs/apk/initiator/release/*.apk
