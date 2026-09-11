@@ -117,6 +117,7 @@ function doGet(e) {
   var sv = ss.getSheetByName(SERVICE_SHEET);
   if (sv) {
     if (String(sv.getRange(1, 2).getValue()) !== 'details') upgradeServices_(sv);
+    arrangeServices_(sv);
     var svv = sv.getDataRange().getValues();
     for (var si = 1; si < svv.length; si++) {
       if (svv[si][0]) {
@@ -188,6 +189,47 @@ function handleService_(d) {
   if (row < 0) sheet.appendRow([String(d.name), String(d.details || '')]);
   else if (d.details) sheet.getRange(row, 2).setValue(String(d.details));
   return ok_();
+}
+
+// Keeps the Services tab in presentation order: the Cleaning Set packages
+// first, everything else after, and the old plain 'Cleaning' entry removed
+// (customer rows still using it are migrated to 'Cleaning Set A').
+// No-ops once the tab is already in the desired state.
+function arrangeServices_(sheet) {
+  var v = sheet.getDataRange().getValues();
+  if (v.length < 2) return;
+  var rows = [];
+  for (var r = 1; r < v.length; r++) {
+    if (v[r][0]) rows.push([String(v[r][0]), String(v[r][1] || '')]);
+  }
+  var hadPlain = rows.some(function (x) { return x[0] === 'Cleaning'; });
+  var kept = rows.filter(function (x) { return x[0] !== 'Cleaning'; });
+  var isSet = function (n) { return n.indexOf('Cleaning Set') === 0; };
+  var sets = kept.filter(function (x) { return isSet(x[0]); })
+    .sort(function (a, b) { return a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0); });
+  if (sets.length === 0) return; // packages not created yet; nothing to arrange
+  var rest = kept.filter(function (x) { return !isSet(x[0]); });
+  var desired = sets.concat(rest);
+  var changed = hadPlain || desired.length !== rows.length;
+  if (!changed) {
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i][0] !== desired[i][0]) { changed = true; break; }
+    }
+  }
+  if (!changed) return;
+  sheet.getRange(2, 1, rows.length, 2).clearContent();
+  sheet.getRange(2, 1, desired.length, 2).setValues(desired);
+  if (hadPlain) {
+    var cs = openSs_().getSheetByName(CUSTOMER_SHEET);
+    if (cs) {
+      var cv = cs.getDataRange().getValues();
+      for (var cr = 1; cr < cv.length; cr++) {
+        if (String(cv[cr][2]) === 'Cleaning') {
+          cs.getRange(cr + 1, 3).setValue('Cleaning Set A');
+        }
+      }
+    }
+  }
 }
 
 // One-time upgrade of the Services tab: adds the 'details' column and the
