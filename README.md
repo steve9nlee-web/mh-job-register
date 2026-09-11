@@ -1,4 +1,4 @@
-# Job Register — Role-Based Android Apps
+# MH Job Register — Role-Based Android Apps
 
 One Android codebase that builds **four separate APKs**, one per role. Every
 app follows the same WhatsApp → billing workflow, but each APK only shows the
@@ -6,10 +6,10 @@ steps and information that role needs.
 
 | APK | Who installs it | What they see |
 |---|---|---|
-| **Job Register Admin** (blue) | You / office admin | Everything: full job register, AI-flag review, status updates, rate card matching, customer billing, cleaner & repairer payment summaries, invoice/payment tracking, follow-up list |
-| **Job Register Cleaner** (teal) | Cleaning contractors | Only cleaning jobs, status update + remarks, their own pay. **No customer prices** |
-| **Job Register Repairer** (orange) | Repair contractors (plumbing, electrical, aircon, general) | Only repair jobs, status update + remarks, their own pay. **No customer prices** |
-| **Job Register Initiator** (purple) | Whoever posts the daily WhatsApp message | Paste WhatsApp message → AI conversion into register rows, job status tracking, pending follow-up list. **No money information at all** |
+| **MH Job Register Admin** (blue) | You / office admin | Everything: full job register, AI-flag review, status updates, rate card matching, customer billing, cleaner & repairer payment summaries, invoice/payment tracking, follow-up list |
+| **MH Job Register Cleaner** (teal) | Cleaning contractors | Only cleaning jobs, status update + remarks, their own pay. **No customer prices** |
+| **MH Job Register Repairer** (orange) | Repair contractors (plumbing, electrical, aircon, general) | Only repair jobs, status update + remarks, their own pay. **No customer prices** |
+| **MH Job Register Initiator** (purple) | Whoever posts the daily WhatsApp message | Paste WhatsApp message → AI conversion into register rows, job status tracking, pending follow-up list. **No money information at all** |
 
 All four install side by side on one phone (different application IDs), so you
 can test them together.

@@ -21,25 +21,25 @@ android {
         create("admin") {
             dimension = "role"
             applicationIdSuffix = ".admin"
-            resValue("string", "app_name", "Job Register Admin")
+            resValue("string", "app_name", "MH Job Register Admin")
             buildConfigField("String", "ROLE", "\"ADMIN\"")
         }
         create("cleaner") {
             dimension = "role"
             applicationIdSuffix = ".cleaner"
-            resValue("string", "app_name", "Job Register Cleaner")
+            resValue("string", "app_name", "MH Job Register Cleaner")
             buildConfigField("String", "ROLE", "\"CLEANER\"")
         }
         create("repairer") {
             dimension = "role"
             applicationIdSuffix = ".repairer"
-            resValue("string", "app_name", "Job Register Repairer")
+            resValue("string", "app_name", "MH Job Register Repairer")
             buildConfigField("String", "ROLE", "\"REPAIRER\"")
         }
         create("initiator") {
             dimension = "role"
             applicationIdSuffix = ".initiator"
-            resValue("string", "app_name", "Job Register Initiator")
+            resValue("string", "app_name", "MH Job Register Initiator")
             buildConfigField("String", "ROLE", "\"INITIATOR\"")
         }
     }

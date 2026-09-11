@@ -41,7 +41,7 @@ object RoleConfig {
     }.sortedByDescending { it.date }
 
     val appTitle: String get() = when (role) {
-        Role.ADMIN -> "Job Register — Admin"
+        Role.ADMIN -> "MH Job Register — Admin"
         Role.CLEANER -> "My Cleaning Jobs"
         Role.REPAIRER -> "My Repair Jobs"
         Role.INITIATOR -> "Job Intake"
