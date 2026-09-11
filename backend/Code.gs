@@ -227,8 +227,10 @@ function handleService_(d) {
 //   Cleaning Set A/B/C, General, Pest Control, ...)
 // - legacy entries ('Cleaning', 'AirCond Service') are removed and any
 //   customer rows using them are migrated to the matching package
-// - a package's details text is only (re)written while the cell is empty
-//   or still a placeholder, so edits made in the sheet are never clobbered
+// - each package's price/scope text is taken from this file, which is the
+//   master copy, so an outdated description in the sheet is corrected;
+//   packages left blank here (AirCond Inspection & Repairs, Plumbing) keep
+//   whatever has been typed into the sheet
 // No-ops once the tab is in the desired state.
 function ensureServicePackages_(sheet) {
   if (String(sheet.getRange(1, 2).getValue()) !== 'details') {
@@ -260,9 +262,11 @@ function ensureServicePackages_(sheet) {
   var packNames = {};
   var packRows = PACKAGES.map(function (p) {
     packNames[p[0]] = true;
-    var cur = byName[p[0]];
-    var keep = cur && cur !== '' && cur.indexOf('Details to be added') !== 0;
-    return [p[0], keep ? cur : p[1]];
+    // The text above is the master copy and is rewritten on every sync, so a
+    // description left behind by an older version of this script (Set B and
+    // Set C once carried Set A's prices) is corrected automatically.
+    // The packages with no text here keep whatever is typed into the sheet.
+    return [p[0], p[1] || byName[p[0]] || ''];
   });
 
   var rest = rows.filter(function (x) {
