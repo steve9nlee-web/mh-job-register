@@ -116,8 +116,7 @@ function doGet(e) {
   var serviceInfo = [];
   var sv = ss.getSheetByName(SERVICE_SHEET);
   if (sv) {
-    if (String(sv.getRange(1, 2).getValue()) !== 'details') upgradeServices_(sv);
-    arrangeServices_(sv);
+    ensureServicePackages_(sv);
     var svv = sv.getDataRange().getValues();
     for (var si = 1; si < svv.length; si++) {
       if (svv[si][0]) {
@@ -191,81 +190,77 @@ function handleService_(d) {
   return ok_();
 }
 
-// Keeps the Services tab in presentation order: the Cleaning Set packages
-// first, everything else after, and the old plain 'Cleaning' entry removed
-// (customer rows still using it are migrated to 'Cleaning Set A').
-// No-ops once the tab is already in the desired state.
-function arrangeServices_(sheet) {
+// Keeps the Services tab as the service-package catalogue:
+// - the five packages exist, in presentation order (cleaning sets first,
+//   then the two aircond packages), other services after them
+// - legacy entries ('Cleaning', 'AirCond Service') are removed and any
+//   customer rows using them are migrated to the matching package
+// - a package's details text is only (re)written while the cell is empty
+//   or still a placeholder, so edits made in the sheet are never clobbered
+// No-ops once the tab is in the desired state.
+function ensureServicePackages_(sheet) {
+  if (String(sheet.getRange(1, 2).getValue()) !== 'details') {
+    sheet.getRange(1, 2).setValue('details');
+  }
+  var PACKAGES = [
+    ['Cleaning Set A', 'Set A \u2014 Occupied Unit (Routine Housekeeping Service)\n\nPrices:\n1 x Room: RM 35.00\n2 x Room: RM 70.00\n3 x Room: RM 105.00\nYard Cleaning: RM 35.00\nWhole House incl. common area (Living Hall, Dining Area, Kitchen & Toilet): RM 120.00\n\nScope of work:\n\u2022 Sweeping and vacuuming of all accessible floor areas\n\u2022 Damp mopping of floor finishes\n\u2022 Wipe down accessible furniture and surfaces\n\u2022 General dusting of fixtures and fittings\n\u2022 Final visual inspection upon completion'],
+    ['Cleaning Set B', 'Set B \u2014 Occupied Unit (Enhanced Housekeeping Service)\n\nPrices:\n1 x Room: RM 50.00\n2 x Room: RM 90.00\n3 x Room: RM 120.00\nWhole House incl. common area (Living Hall, Dining Area, Kitchen & Toilet): RM 140.00\n\nScope of work:\n\u2022 Includes all services under Cleaning Set A, plus:\n\u2022 Replacement of bed sheets and pillowcases\n\u2022 Replacement of blanket or quilt covers\n\u2022 Laundry washing of bed linens, pillowcases and blankets/quilts\n\u2022 Detailed cleaning of high-touch surfaces\n\u2022 Additional spot cleaning where required'],
+    ['Cleaning Set C', 'Set C \u2014 Vacant Unit (Move-Out / Move-In Deep Cleaning)\n\nPrices:\nWhole House incl. common area (Living Hall, Dining Area, Kitchen & Toilet): RM 170.00\n\nScope of work:\n\u2022 Includes all services under Cleaning Set B, plus:\n\u2022 Comprehensive deep cleaning of the entire premise\n\u2022 Detailed cleaning of kitchen cabinets, wardrobes and internal shelving\n\u2022 Removal of stains, dirt build-up and accumulated dust\n\u2022 Disposal of general waste and unwanted items\n\u2022 Collection and storage of tenant belongings identified as Lost & Found items for the retention period in accordance with Company SOP. Unclaimed items will be disposed of upon expiry of the retention period.'],
+    ['AirCond Normal Service', 'Normal Air Conditioning Servicing\n\nPrice: RM 90.00 per unit\n\nScope of work:\n\u2022 Clean and wash reusable air filters\n\u2022 Clean the indoor unit front panel and external casing\n\u2022 Vacuum clean the evaporator coil surface\n\u2022 Flush and clear the condensate drain tray and drain pipe\n\u2022 Inspect the indoor blower fan operation\n\u2022 Inspect refrigerant pipe insulation for signs of deterioration\n\u2022 Inspect electrical wiring, terminals and connection points\n\u2022 Measure and record operating temperature (return air and supply air)\n\u2022 Test thermostat and remote controller functionality\n\u2022 Inspect for abnormal noise, vibration and water leakage\n\u2022 Perform final operational and cooling performance test'],
+    ['AirCond Chemical Overhaul', 'Chemical Overhaul (Indoor and Outdoor units)\n\nPrice: RM 180.00 per unit\n\nScope of work:\n\u2022 Fully dismantle the indoor unit\n\u2022 Remove the evaporator coil and blower wheel\n\u2022 Perform chemical cleaning of the evaporator coil\n\u2022 Perform chemical cleaning of the blower wheel\n\u2022 Thoroughly clean the drain tray and condensate drain pipe\n\u2022 Clean all plastic covers, louvers and casing components\n\u2022 Chemically clean the outdoor condenser coil\n\u2022 Inspect condenser fan motor and compressor condition\n\u2022 Inspect capacitor, electrical terminals and printed circuit board (PCB)\n\u2022 Reassemble all components\n\u2022 Conduct drainage flow test\n\u2022 Perform refrigerant leakage inspection\n\u2022 Measure operating current and operating temperature\n\u2022 Conduct final cooling performance and functional testing']
+  ];
+  var LEGACY = { 'Cleaning': 'Cleaning Set A', 'AirCond Service': 'AirCond Normal Service' };
+
   var v = sheet.getDataRange().getValues();
-  if (v.length < 2) return;
   var rows = [];
   for (var r = 1; r < v.length; r++) {
     if (v[r][0]) rows.push([String(v[r][0]), String(v[r][1] || '')]);
   }
-  var hadPlain = rows.some(function (x) { return x[0] === 'Cleaning'; });
-  var kept = rows.filter(function (x) { return x[0] !== 'Cleaning'; });
-  var isSet = function (n) { return n.indexOf('Cleaning Set') === 0; };
-  var sets = kept.filter(function (x) { return isSet(x[0]); })
-    .sort(function (a, b) { return a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0); });
-  if (sets.length === 0) return; // packages not created yet; nothing to arrange
-  var rest = kept.filter(function (x) { return !isSet(x[0]); });
-  var desired = sets.concat(rest);
-  var changed = hadPlain || desired.length !== rows.length;
+  var byName = {};
+  rows.forEach(function (x) { byName[x[0]] = x[1]; });
+
+  var hadLegacy = Object.keys(LEGACY).some(function (o) {
+    return byName.hasOwnProperty(o);
+  });
+
+  var packNames = {};
+  var packRows = PACKAGES.map(function (p) {
+    packNames[p[0]] = true;
+    var cur = byName[p[0]];
+    var keep = cur && cur !== '' && cur.indexOf('Details to be added') !== 0;
+    return [p[0], keep ? cur : p[1]];
+  });
+
+  var rest = rows.filter(function (x) {
+    return !packNames[x[0]] && !LEGACY.hasOwnProperty(x[0]);
+  });
+  var desired = packRows.concat(rest);
+
+  var changed = hadLegacy || desired.length !== rows.length;
   if (!changed) {
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i][0] !== desired[i][0]) { changed = true; break; }
+    for (var i = 0; i < desired.length; i++) {
+      if (rows[i][0] !== desired[i][0] || rows[i][1] !== desired[i][1]) {
+        changed = true; break;
+      }
     }
   }
   if (!changed) return;
-  sheet.getRange(2, 1, rows.length, 2).clearContent();
+
+  if (rows.length) sheet.getRange(2, 1, rows.length, 2).clearContent();
   sheet.getRange(2, 1, desired.length, 2).setValues(desired);
-  if (hadPlain) {
+
+  if (hadLegacy) {
     var cs = openSs_().getSheetByName(CUSTOMER_SHEET);
     if (cs) {
       var cv = cs.getDataRange().getValues();
       for (var cr = 1; cr < cv.length; cr++) {
-        if (String(cv[cr][2]) === 'Cleaning') {
-          cs.getRange(cr + 1, 3).setValue('Cleaning Set A');
+        var svc = String(cv[cr][2]);
+        if (LEGACY.hasOwnProperty(svc)) {
+          cs.getRange(cr + 1, 3).setValue(LEGACY[svc]);
         }
       }
     }
   }
-}
-
-// One-time upgrade of the Services tab: adds the 'details' column and the
-// three Cleaning Set packages. Runs automatically from doGet when missing.
-// Edit the details text directly in the Services tab — the apps show it in
-// the service info pop-up after their next sync.
-function upgradeServices_(sheet) {
-  sheet.getRange(1, 2).setValue('details');
-  var SET_A =
-    'Set A — Occupied Unit (Routine Housekeeping Service)\n' +
-    '\n' +
-    'Prices:\n' +
-    '1 x Room: RM 35.00\n' +
-    '2 x Room: RM 70.00\n' +
-    '3 x Room: RM 105.00\n' +
-    'Yard Cleaning: RM 35.00\n' +
-    'Whole House incl. common area (Living Hall, Dining Area, Kitchen & Toilet): RM 120.00\n' +
-    '\n' +
-    'Scope of work:\n' +
-    '\u2022 Sweeping and vacuuming of all accessible floor areas\n' +
-    '\u2022 Damp mopping of floor finishes\n' +
-    '\u2022 Wipe down accessible furniture and surfaces\n' +
-    '\u2022 General dusting of fixtures and fittings\n' +
-    '\u2022 Final visual inspection upon completion';
-  var sets = [
-    ['Cleaning Set A', SET_A],
-    ['Cleaning Set B', 'Details to be added \u2014 edit this cell in the Services tab.'],
-    ['Cleaning Set C', 'Details to be added \u2014 edit this cell in the Services tab.']
-  ];
-  var v = sheet.getDataRange().getValues();
-  var have = {};
-  for (var r = 1; r < v.length; r++) have[String(v[r][0])] = r + 1;
-  sets.forEach(function (setRow) {
-    if (have[setRow[0]]) sheet.getRange(have[setRow[0]], 2).setValue(setRow[1]);
-    else sheet.appendRow(setRow);
-  });
 }
 
 /** POST -> job upsert (default) or customer/apartment/service change. */
