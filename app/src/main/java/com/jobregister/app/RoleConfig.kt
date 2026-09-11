@@ -32,8 +32,22 @@ object RoleConfig {
     val canManageInvoices get() = role == Role.ADMIN
     val canSeeFollowUp get() = role == Role.ADMIN || role == Role.INITIATOR
 
-    /** Job photos are for whoever reports and whoever oversees the job. */
-    val canSeePhotos get() = role == Role.ADMIN || role == Role.INITIATOR
+    /** Contractors record the work with a before and an after photo. */
+    val canAddWorkPhotos get() = role == Role.CLEANER || role == Role.REPAIRER
+
+    /** Contractors get one "Completed" button instead of the status list. */
+    val completionOnly get() = role == Role.CLEANER || role == Role.REPAIRER
+
+    /**
+     * Which photos this APK shows: the person who raised the job sees the
+     * photo that came with it, the contractor sees their own before/after
+     * record, and the admin sees everything.
+     */
+    fun canSeePhoto(kind: String): Boolean = when (role) {
+        Role.ADMIN -> true
+        Role.INITIATOR -> kind != "before" && kind != "after"
+        Role.CLEANER, Role.REPAIRER -> kind == "before" || kind == "after"
+    }
 
     /** Which jobs this APK shows at all. */
     fun visibleJobs(all: List<Job>): List<Job> = when (role) {
@@ -41,7 +55,7 @@ object RoleConfig {
         Role.CLEANER -> all.filter { it.category.isCleaning }
         Role.REPAIRER -> all.filter { it.category.isRepair }
         Role.INITIATOR -> all
-    }.sortedByDescending { it.date }
+    }.reversed().sortedByDescending { it.date }   // newest job at the top
 
     val appTitle: String get() = when (role) {
         Role.ADMIN -> "MH Job Register — Admin"

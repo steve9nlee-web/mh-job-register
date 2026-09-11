@@ -92,7 +92,9 @@ fun JobListScreen(
             )
         } else {
             LazyColumn(Modifier.padding(horizontal = 12.dp)) {
-                val withPhotos = photos.map { it.jobId }.toSet()
+                val withPhotos = photos
+                    .filter { RoleConfig.canSeePhoto(it.kind) }
+                    .map { it.jobId }.toSet()
                 items(visible, key = { it.id }) { job ->
                     JobCard(job, hasPhoto = job.id in withPhotos) { onOpen(job.id) }
                 }

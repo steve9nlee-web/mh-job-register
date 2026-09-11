@@ -80,7 +80,7 @@ fun JobCard(job: Job, hasPhoto: Boolean = false, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (hasPhoto && RoleConfig.canSeePhotos) {
+                    if (hasPhoto) {
                         Icon(Icons.Filled.PhotoCamera, contentDescription = "Has a photo",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.width(6.dp))

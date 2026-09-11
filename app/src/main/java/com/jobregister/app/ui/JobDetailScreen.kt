@@ -99,8 +99,10 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                 }
             }
 
-            val photos = allPhotos.filter { it.jobId == job.id }
-            if (RoleConfig.canSeePhotos && photos.isNotEmpty()) {
+            val photos = allPhotos.filter {
+                it.jobId == job.id && RoleConfig.canSeePhoto(it.kind)
+            }
+            if (photos.isNotEmpty()) {
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         SectionHeader(
@@ -111,18 +113,46 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                 }
             }
 
+            if (RoleConfig.canAddWorkPhotos) {
+                Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        SectionHeader("Work photos")
+                        Text(
+                            "Take one photo before you start and one when the work " +
+                                "is finished. Each is saved with the job number, date and time.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        WorkPhotoRow(
+                            title = "Before work",
+                            saved = photos.count { it.kind == "before" },
+                            takeLabel = "📷 Before photo"
+                        ) { picked -> vm.uploadPhoto(job.id, picked, "before") }
+                        Spacer(Modifier.height(12.dp))
+                        WorkPhotoRow(
+                            title = "After work",
+                            saved = photos.count { it.kind == "after" },
+                            takeLabel = "📷 After photo"
+                        ) { picked -> vm.uploadPhoto(job.id, picked, "after") }
+                    }
+                }
+            }
+
             if (RoleConfig.canUpdateStatus) {
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         SectionHeader("Update Status")
-                        Row(Modifier.horizontalScroll(rememberScrollState())) {
-                            JobStatus.entries.forEach { s ->
-                                FilterChip(
-                                    selected = status == s,
-                                    onClick = { status = s },
-                                    label = { Text(s.label) },
-                                    modifier = Modifier.padding(end = 6.dp)
-                                )
+                        if (!RoleConfig.completionOnly) {
+                            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                                JobStatus.entries.forEach { s ->
+                                    FilterChip(
+                                        selected = status == s,
+                                        onClick = { status = s },
+                                        label = { Text(s.label) },
+                                        modifier = Modifier.padding(end = 6.dp)
+                                    )
+                                }
                             }
                         }
                         OutlinedTextField(
@@ -130,10 +160,24 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                             label = { Text("Remarks") },
                             modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
                         )
-                        Button(
-                            onClick = { vm.updateStatus(job.id, status, remarks) },
-                            modifier = Modifier.padding(top = 8.dp)
-                        ) { Text("Save status") }
+                        if (RoleConfig.completionOnly) {
+                            Button(
+                                onClick = {
+                                    vm.updateStatus(job.id, JobStatus.COMPLETED, remarks)
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            ) {
+                                Text(
+                                    if (job.status == JobStatus.COMPLETED) "Completed ✓"
+                                    else "Completed"
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = { vm.updateStatus(job.id, status, remarks) },
+                                modifier = Modifier.padding(top = 8.dp)
+                            ) { Text("Save status") }
+                        }
                     }
                 }
             }
@@ -220,10 +264,33 @@ private fun JobPhoto(vm: AppViewModel, photo: SheetApi.JobPhoto) {
             }
         }
         Text(
-            photo.uploadedAt.ifBlank { photo.filename },
+            listOf(photoKindLabel(photo.kind), photo.uploadedAt.ifBlank { photo.filename })
+                .filter { it.isNotBlank() }.joinToString("  ·  "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp)
         )
     }
+}
+
+private fun photoKindLabel(kind: String): String = when (kind) {
+    "before" -> "Before work"
+    "after" -> "After work"
+    else -> "Job photo"
+}
+
+/** Title, how many are already saved, and the two capture buttons. */
+@Composable
+private fun WorkPhotoRow(
+    title: String,
+    saved: Int,
+    takeLabel: String,
+    onPicked: (ByteArray) -> Unit
+) {
+    Text(
+        if (saved > 0) "$title  ✓ $saved saved" else title,
+        style = MaterialTheme.typography.titleSmall
+    )
+    Spacer(Modifier.height(4.dp))
+    PhotoPickerButtons(takeLabel = takeLabel, onPicked = onPicked)
 }

@@ -29,9 +29,9 @@
  * reviewReason | remarks | customerCharge | contractorPayable | invoiced |
  * paid | createdBy | rawMessage | rooms
  *
- * Job photos are stored in the Drive folder below and listed on a "Photos"
- * tab; the apps read them back through this same web app, so a phone shows
- * the picture without needing its own access to the Drive folder.
+ * Job photos are stored in the two Drive folders below and listed on a
+ * "Photos" tab; the apps read them back through this same web app, so a
+ * phone shows the picture without needing its own access to Drive.
  */
 
 // The Job Register spreadsheet ("MH Contractors Database"). All app data is
@@ -165,7 +165,8 @@ function doGet(e) {
         filename: String(pv[pi][1] || ''),
         url: String(pv[pi][2] || ''),
         fileId: String(pv[pi][3] || ''),
-        uploadedAt: String(pv[pi][4] || '')
+        uploadedAt: String(pv[pi][4] || ''),
+        kind: String(pv[pi][5] || 'job')
       });
     }
   }
@@ -193,9 +194,9 @@ function findRow_(sheet, col, value) {
   return -1;
 }
 
-// Save an uploaded job photo (base64 JPEG) into the Drive folder and log it
-// on the Photos tab with job no and upload time.
-var PHOTO_HEADERS = ['jobId', 'filename', 'driveUrl', 'fileId', 'uploadedAt'];
+// Photos tab layout. 'kind' is last so a tab written by an earlier version
+// keeps its columns; rows without a kind are treated as job photos.
+var PHOTO_HEADERS = ['jobId', 'filename', 'driveUrl', 'fileId', 'uploadedAt', 'kind'];
 
 function photoSheet_() {
   var ss = openSs_();
@@ -216,27 +217,32 @@ function photoSheet_() {
   return ps;
 }
 
+// Save an uploaded photo (base64 JPEG) into the folder its kind belongs to
+// and log it on the Photos tab with job no and upload time.
 function handlePhoto_(d) {
+  var kind = String(d.kind || 'job');
   var name = String(d.filename || ('photo_' + Date.now() + '.jpg'));
   var blob = Utilities.newBlob(Utilities.base64Decode(String(d.data)), 'image/jpeg', name);
-  var file = DriveApp.getFolderById(PHOTO_FOLDER_ID).createFile(blob);
+  var file = DriveApp.getFolderById(photoFolderFor_(kind)).createFile(blob);
   photoSheet_().appendRow([
     String(d.jobId || ''), name, file.getUrl(), file.getId(),
-    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
+    kind
   ]);
   return ok_();
 }
 
 // Return one job photo as base64 so the apps can display it. Only files that
-// sit in the job photo folder are served, so a valid sync key cannot be used
-// to read the rest of the owner's Drive.
+// sit in one of the two photo folders are served, so a valid sync key cannot
+// be used to read the rest of the owner's Drive.
 function servePhoto_(fileId) {
   try {
     var file = DriveApp.getFileById(String(fileId));
     var inFolder = false;
     var parents = file.getParents();
     while (parents.hasNext()) {
-      if (parents.next().getId() === PHOTO_FOLDER_ID) { inFolder = true; break; }
+      var pid = parents.next().getId();
+      if (pid === PHOTO_FOLDER_ID || pid === WORK_PHOTO_FOLDER_ID) { inFolder = true; break; }
     }
     if (!inFolder) {
       return ContentService.createTextOutput(JSON.stringify({ error: 'Not a job photo' }))
@@ -428,8 +434,18 @@ function formatDate_(v) {
 //                 Delete a row: right-click > Delete row.
 // ---------------------------------------------------------------------------
 
-// Google Drive folder that receives job photos uploaded from the apps.
+// Google Drive folders that receive photos uploaded from the apps.
+// PHOTO_FOLDER_ID  - the picture taken when a job is raised (Initiator).
+// WORK_PHOTO_FOLDER_ID - before/after pictures taken by the contractor.
 var PHOTO_FOLDER_ID = '1TZZteVqmOYNGy1LtaNSN_HmMmipqAvoa';
+var WORK_PHOTO_FOLDER_ID = '1N-wODATUjCGzemtrEFLXErI-gAltRPXu';
+
+// Which folder a photo belongs in. 'before' and 'after' are the contractor's
+// work record; anything else is the photo taken when the job was raised.
+function photoFolderFor_(kind) {
+  return (kind === 'before' || kind === 'after')
+    ? WORK_PHOTO_FOLDER_ID : PHOTO_FOLDER_ID;
+}
 var PHOTO_SHEET = 'Photos';
 
 var CUSTOMER_SHEET = 'Customers';

@@ -84,22 +84,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Stamp the photo with job no + date/time and upload it to the Drive folder. */
-    fun uploadPhoto(jobId: String, bytes: ByteArray) {
+    /**
+     * Stamp a photo with the job number and the time it was taken, then send
+     * it to the backend. [kind] is "job" for the picture attached when the
+     * job is raised, or "before"/"after" for the contractor's work record —
+     * each kind lands in its own Drive folder.
+     */
+    fun uploadPhoto(jobId: String, bytes: ByteArray, kind: String = "job") {
         viewModelScope.launch {
             val now = LocalDateTime.now()
-            val label = "$jobId  " + now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+            val tag = when (kind) {
+                "before" -> "BEFORE"
+                "after" -> "AFTER"
+                else -> ""
+            }
+            val stampedAt = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+            val label = listOf(jobId, tag, stampedAt).filter { it.isNotBlank() }.joinToString("  ")
             val stamped = PhotoUtil.stamp(bytes, label)
-            val filename = jobId + "_" + now.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".jpg"
+            val filename = listOf(jobId, tag, now.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")))
+                .filter { it.isNotBlank() }.joinToString("_") + ".jpg"
             _message.value = "Uploading photo…"
             val err = repo.pushAction(JSONObject().apply {
                 put("type", "photo"); put("jobId", jobId)
+                put("kind", kind)
                 put("filename", filename)
                 put("data", Base64.encodeToString(stamped, Base64.NO_WRAP))
             })
             if (err == null) {
                 // Pull the Photos tab back so the picture shows on the job.
                 repo.pull()
-                _message.value = "Photo uploaded to Drive"
+                _message.value = when (kind) {
+                    "before" -> "Before photo saved"
+                    "after" -> "After photo saved"
+                    else -> "Photo uploaded to Drive"
+                }
             } else {
                 _message.value = "Photo upload failed: $err"
             }

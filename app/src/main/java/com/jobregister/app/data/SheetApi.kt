@@ -37,7 +37,8 @@ object SheetApi {
         val fileId: String,
         val filename: String = "",
         val url: String = "",
-        val uploadedAt: String = ""
+        val uploadedAt: String = "",
+        val kind: String = "job"     // "job", "before" or "after"
     )
 
     suspend fun fetchAll(baseUrl: String, key: String = ""): RemoteData = withContext(Dispatchers.IO) {
@@ -93,7 +94,8 @@ object SheetApi {
                     fileId = p.optString("fileId"),
                     filename = p.optString("filename"),
                     url = p.optString("url"),
-                    uploadedAt = p.optString("uploadedAt")
+                    uploadedAt = p.optString("uploadedAt"),
+                    kind = p.optString("kind").ifBlank { "job" }
                 )
             }.filter { it.jobId.isNotBlank() && it.fileId.isNotBlank() }
 

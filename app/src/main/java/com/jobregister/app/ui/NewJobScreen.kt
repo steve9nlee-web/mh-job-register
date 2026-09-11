@@ -1,12 +1,5 @@
 package com.jobregister.app.ui
 
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.FileProvider
-import androidx.compose.ui.platform.LocalContext
-import com.jobregister.app.util.PhotoUtil
-import java.io.File
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -72,19 +65,7 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
     var selRoom by remember { mutableStateOf("") }
     var jobDesc by remember { mutableStateOf("") }
 
-    val context = LocalContext.current
     var photoBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
-    val takePicture = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { ok ->
-        if (ok) cameraUri?.let { uri -> photoBytes = PhotoUtil.compress(context, uri) }
-    }
-    val pickImage = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { photoBytes = PhotoUtil.compress(context, it) }
-    }
 
     Column(modifier.fillMaxSize()) {
         TopAppBar(
@@ -179,23 +160,7 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                             )
                             Spacer(Modifier.height(8.dp))
                             SectionHeader("Photo (optional)")
-                            Row {
-                                OutlinedButton(onClick = {
-                                    val file = File(
-                                        context.cacheDir,
-                                        "job_photo_${System.currentTimeMillis()}.jpg"
-                                    )
-                                    val uri = FileProvider.getUriForFile(
-                                        context, context.packageName + ".fileprovider", file
-                                    )
-                                    cameraUri = uri
-                                    takePicture.launch(uri)
-                                }) { Text("📷 Take photo") }
-                                Spacer(Modifier.width(8.dp))
-                                OutlinedButton(onClick = { pickImage.launch("image/*") }) {
-                                    Text("🖼 Upload")
-                                }
-                            }
+                            PhotoPickerButtons { picked -> photoBytes = picked }
                             photoBytes?.let { bytes ->
                                 Row {
                                     Text(
