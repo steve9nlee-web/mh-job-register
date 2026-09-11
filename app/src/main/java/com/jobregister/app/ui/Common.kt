@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,7 +66,7 @@ fun LabelValue(label: String, value: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun JobCard(job: Job, onClick: () -> Unit) {
+fun JobCard(job: Job, hasPhoto: Boolean = false, onClick: () -> Unit) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Column(Modifier.padding(12.dp)) {
             Row(
@@ -79,6 +80,11 @@ fun JobCard(job: Job, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (hasPhoto && RoleConfig.canSeePhotos) {
+                        Icon(Icons.Filled.PhotoCamera, contentDescription = "Has a photo",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(6.dp))
+                    }
                     if (job.needsReview && RoleConfig.canReviewFlags) {
                         Icon(Icons.Filled.Flag, contentDescription = "Needs review",
                             tint = Color(0xFFC62828))

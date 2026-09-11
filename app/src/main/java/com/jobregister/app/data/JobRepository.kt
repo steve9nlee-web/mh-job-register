@@ -37,6 +37,12 @@ class JobRepository(context: Context) {
     private val _serviceDetails = MutableStateFlow<Map<String, String>>(emptyMap())
     val serviceDetails: StateFlow<Map<String, String>> = _serviceDetails
 
+    private val _photos = MutableStateFlow<List<SheetApi.JobPhoto>>(emptyList())
+    val photos: StateFlow<List<SheetApi.JobPhoto>> = _photos
+
+    // Decoded photos already downloaded in this session, keyed by Drive file id.
+    private val photoCache = LinkedHashMap<String, ByteArray>()
+
     var syncUrl: String
         get() = prefs.getString("sync_url", null)?.takeIf { it.isNotBlank() }
             ?: BuildConfig.DEFAULT_SYNC_URL
@@ -112,6 +118,7 @@ class JobRepository(context: Context) {
             if (remote.apartments.isNotEmpty()) _apartments.value = remote.apartments
             if (remote.services.isNotEmpty()) _services.value = remote.services
             if (remote.serviceDetails.isNotEmpty()) _serviceDetails.value = remote.serviceDetails
+            _photos.value = remote.photos
             persist()
             persistDirectory()
             null
@@ -163,6 +170,21 @@ class JobRepository(context: Context) {
     fun deleteServiceLocal(name: String) {
         _services.value = _services.value.filterNot { it.equals(name, ignoreCase = true) }
         persistDirectory()
+    }
+
+    /** JPEG bytes for one job photo, downloaded once and then cached. */
+    suspend fun photoBytes(fileId: String): ByteArray? {
+        synchronized(photoCache) { photoCache[fileId] }?.let { return it }
+        val url = syncUrl
+        if (url.isBlank()) return null
+        val bytes = SheetApi.fetchPhoto(url, syncKey, fileId) ?: return null
+        synchronized(photoCache) {
+            photoCache[fileId] = bytes
+            while (photoCache.size > 12) {
+                photoCache.remove(photoCache.keys.first())
+            }
+        }
+        return bytes
     }
 
     suspend fun pushAction(body: JSONObject): String? {

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jobregister.app.ai.MessageParser
 import com.jobregister.app.data.JobRepository
+import com.jobregister.app.data.SheetApi
 import com.jobregister.app.model.Customer
 import com.jobregister.app.model.Job
 import com.jobregister.app.model.JobCategory
@@ -29,6 +30,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val apartments: StateFlow<Map<String, String>> = repo.apartments
     val services: StateFlow<List<String>> = repo.services
     val serviceDetails: StateFlow<Map<String, String>> = repo.serviceDetails
+    val photos: StateFlow<List<SheetApi.JobPhoto>> = repo.photos
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
@@ -51,7 +53,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun consumeMessage() { _message.value = null }
 
     /** Create a job for a registered customer unit picked from the dropdowns. */
-    fun createJob(unit: String, service: String, description: String, photo: ByteArray? = null) {
+    fun createJob(
+        unit: String,
+        service: String,
+        description: String,
+        photo: ByteArray? = null,
+        rooms: String = ""
+    ) {
         val category = when {
             service.contains("clean", ignoreCase = true) -> JobCategory.CLEANING
             service.contains("air", ignoreCase = true) -> JobCategory.AIRCON
@@ -59,7 +67,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             service.contains("plumb", ignoreCase = true) -> JobCategory.PLUMBING
             else -> JobCategory.GENERAL_REPAIR
         }
-        val desc = if (description.isBlank()) service else "$service — $description"
+        val desc = listOf(service, rooms, description)
+            .filter { it.isNotBlank() }.joinToString(" — ")
         saveJob(Job(
             id = "J-" + UUID.randomUUID().toString().take(8).uppercase(),
             date = LocalDate.now().toString(),
@@ -67,7 +76,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             category = category,
             description = desc,
             status = JobStatus.PENDING,
-            createdBy = userName.ifBlank { RoleConfig.role.name }
+            createdBy = userName.ifBlank { RoleConfig.role.name },
+            rooms = rooms
         ).also { job ->
             if (photo != null) uploadPhoto(job.id, photo)
         })
@@ -86,9 +96,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 put("filename", filename)
                 put("data", Base64.encodeToString(stamped, Base64.NO_WRAP))
             })
-            _message.value = if (err == null) "Photo uploaded to Drive" else "Photo upload failed: $err"
+            if (err == null) {
+                // Pull the Photos tab back so the picture shows on the job.
+                repo.pull()
+                _message.value = "Photo uploaded to Drive"
+            } else {
+                _message.value = "Photo upload failed: $err"
+            }
         }
     }
+
+    /** JPEG bytes of a job photo, fetched through the backend and cached. */
+    suspend fun photoBytes(fileId: String): ByteArray? = repo.photoBytes(fileId)
 
     /** AI conversion step: raw WhatsApp text -> job row (not yet saved). */
     fun parseMessage(raw: String): Job =

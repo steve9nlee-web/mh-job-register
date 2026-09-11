@@ -49,7 +49,8 @@ data class Job(
     val invoiced: Boolean = false,
     val paid: Boolean = false,
     val createdBy: String = "",
-    val rawMessage: String = ""           // original WhatsApp text
+    val rawMessage: String = "",          // original WhatsApp text
+    val rooms: String = ""                // e.g. "Room 2", "Room All"
 ) {
     /** Ready for billing = completed and reviewed. */
     val billable: Boolean get() = status == JobStatus.COMPLETED && !needsReview

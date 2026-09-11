@@ -32,6 +32,9 @@ object RoleConfig {
     val canManageInvoices get() = role == Role.ADMIN
     val canSeeFollowUp get() = role == Role.ADMIN || role == Role.INITIATOR
 
+    /** Job photos are for whoever reports and whoever oversees the job. */
+    val canSeePhotos get() = role == Role.ADMIN || role == Role.INITIATOR
+
     /** Which jobs this APK shows at all. */
     fun visibleJobs(all: List<Job>): List<Job> = when (role) {
         Role.ADMIN -> all

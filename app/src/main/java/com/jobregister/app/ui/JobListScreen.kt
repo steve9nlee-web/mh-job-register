@@ -42,6 +42,7 @@ fun JobListScreen(
     showFollowUpFilter: Boolean = false
 ) {
     val jobs by vm.jobs.collectAsState()
+    val photos by vm.photos.collectAsState()
     val syncing by vm.syncing.collectAsState()
     var followUpOnly by remember { mutableStateOf(false) }
     val all = RoleConfig.visibleJobs(jobs)
@@ -91,8 +92,9 @@ fun JobListScreen(
             )
         } else {
             LazyColumn(Modifier.padding(horizontal = 12.dp)) {
+                val withPhotos = photos.map { it.jobId }.toSet()
                 items(visible, key = { it.id }) { job ->
-                    JobCard(job) { onOpen(job.id) }
+                    JobCard(job, hasPhoto = job.id in withPhotos) { onOpen(job.id) }
                 }
             }
         }

@@ -27,7 +27,11 @@
  * The script creates/uses a sheet tab named "JobRegister" with these columns:
  * id | date | unit | category | description | status | needsReview |
  * reviewReason | remarks | customerCharge | contractorPayable | invoiced |
- * paid | createdBy | rawMessage
+ * paid | createdBy | rawMessage | rooms
+ *
+ * Job photos are stored in the Drive folder below and listed on a "Photos"
+ * tab; the apps read them back through this same web app, so a phone shows
+ * the picture without needing its own access to the Drive folder.
  */
 
 // The Job Register spreadsheet ("MH Contractors Database"). All app data is
@@ -43,7 +47,8 @@ var SYNC_KEY = 'MH-SYNC-2026';
 var SHEET_NAME = 'JobRegister';
 var HEADERS = ['id', 'date', 'unit', 'category', 'description', 'status',
   'needsReview', 'reviewReason', 'remarks', 'customerCharge',
-  'contractorPayable', 'invoiced', 'paid', 'createdBy', 'rawMessage'];
+  'contractorPayable', 'invoiced', 'paid', 'createdBy', 'rawMessage',
+  'rooms'];
 
 function openSs_() {
   try {
@@ -60,6 +65,15 @@ function getSheet_() {
     sheet = ss.insertSheet(SHEET_NAME);
     sheet.appendRow(HEADERS);
     sheet.setFrozenRows(1);
+    return sheet;
+  }
+  // Keep the header row in step when a new column is added to HEADERS.
+  var head = sheet.getRange(1, 1, 1, HEADERS.length).getValues()[0];
+  for (var h = 0; h < HEADERS.length; h++) {
+    if (head[h] !== HEADERS[h]) {
+      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+      break;
+    }
   }
   return sheet;
 }
@@ -76,6 +90,9 @@ function badKey_() {
 /** GET -> all jobs as JSON. */
 function doGet(e) {
   if (!keyOk_(e)) return badKey_();
+  // ?photo=<fileId> -> that photo as base64, so the apps can display it
+  // without the viewer needing Google Drive access of their own.
+  if (e && e.parameter && e.parameter.photo) return servePhoto_(e.parameter.photo);
   // Auto-create the customer database tabs on first use.
   if (!openSs_().getSheetByName(CUSTOMER_SHEET)) setupCustomerSheets();
   var sheet = getSheet_();
@@ -86,7 +103,7 @@ function doGet(e) {
     if (!row[0]) continue;
     var job = {};
     for (var c = 0; c < HEADERS.length; c++) {
-      job[HEADERS[c]] = row[c];
+      job[HEADERS[c]] = row[c] === undefined ? '' : row[c];
     }
     job.needsReview = row[6] === true || row[6] === 'TRUE' || row[6] === 'true';
     job.invoiced = row[11] === true || row[11] === 'TRUE' || row[11] === 'true';
@@ -137,12 +154,29 @@ function doGet(e) {
     }
   }
 
+  var photos = [];
+  var ph = ss.getSheetByName(PHOTO_SHEET);
+  if (ph) {
+    var pv = ph.getDataRange().getValues();
+    for (var pi = 1; pi < pv.length; pi++) {
+      if (!pv[pi][0]) continue;
+      photos.push({
+        jobId: String(pv[pi][0]),
+        filename: String(pv[pi][1] || ''),
+        url: String(pv[pi][2] || ''),
+        fileId: String(pv[pi][3] || ''),
+        uploadedAt: String(pv[pi][4] || '')
+      });
+    }
+  }
+
   return ContentService.createTextOutput(JSON.stringify({
     jobs: jobs,
     customers: customers,
     apartments: apartments,
     services: services,
-    serviceInfo: serviceInfo
+    serviceInfo: serviceInfo,
+    photos: photos
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -161,22 +195,62 @@ function findRow_(sheet, col, value) {
 
 // Save an uploaded job photo (base64 JPEG) into the Drive folder and log it
 // on the Photos tab with job no and upload time.
-function handlePhoto_(d) {
-  var name = String(d.filename || ('photo_' + Date.now() + '.jpg'));
-  var blob = Utilities.newBlob(Utilities.base64Decode(String(d.data)), 'image/jpeg', name);
-  var file = DriveApp.getFolderById(PHOTO_FOLDER_ID).createFile(blob);
+var PHOTO_HEADERS = ['jobId', 'filename', 'driveUrl', 'fileId', 'uploadedAt'];
+
+function photoSheet_() {
   var ss = openSs_();
   var ps = ss.getSheetByName(PHOTO_SHEET);
   if (!ps) {
     ps = ss.insertSheet(PHOTO_SHEET);
-    ps.appendRow(['jobId', 'filename', 'driveUrl', 'uploadedAt']);
+    ps.appendRow(PHOTO_HEADERS);
     ps.setFrozenRows(1);
+    return ps;
   }
-  ps.appendRow([
-    String(d.jobId || ''), name, file.getUrl(),
+  var head = ps.getRange(1, 1, 1, PHOTO_HEADERS.length).getValues()[0];
+  for (var h = 0; h < PHOTO_HEADERS.length; h++) {
+    if (head[h] !== PHOTO_HEADERS[h]) {
+      ps.getRange(1, 1, 1, PHOTO_HEADERS.length).setValues([PHOTO_HEADERS]);
+      break;
+    }
+  }
+  return ps;
+}
+
+function handlePhoto_(d) {
+  var name = String(d.filename || ('photo_' + Date.now() + '.jpg'));
+  var blob = Utilities.newBlob(Utilities.base64Decode(String(d.data)), 'image/jpeg', name);
+  var file = DriveApp.getFolderById(PHOTO_FOLDER_ID).createFile(blob);
+  photoSheet_().appendRow([
+    String(d.jobId || ''), name, file.getUrl(), file.getId(),
     Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
   ]);
   return ok_();
+}
+
+// Return one job photo as base64 so the apps can display it. Only files that
+// sit in the job photo folder are served, so a valid sync key cannot be used
+// to read the rest of the owner's Drive.
+function servePhoto_(fileId) {
+  try {
+    var file = DriveApp.getFileById(String(fileId));
+    var inFolder = false;
+    var parents = file.getParents();
+    while (parents.hasNext()) {
+      if (parents.next().getId() === PHOTO_FOLDER_ID) { inFolder = true; break; }
+    }
+    if (!inFolder) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Not a job photo' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      fileId: file.getId(),
+      filename: file.getName(),
+      data: Utilities.base64Encode(file.getBlob().getBytes())
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: String(err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function handleCustomer_(d) {

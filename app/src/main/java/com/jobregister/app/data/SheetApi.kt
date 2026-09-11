@@ -1,5 +1,6 @@
 package com.jobregister.app.data
 
+import android.util.Base64
 import com.jobregister.app.model.Customer
 import com.jobregister.app.model.Job
 import com.jobregister.app.model.JobCategory
@@ -26,7 +27,17 @@ object SheetApi {
         val customers: List<Customer>,
         val apartments: Map<String, String>,
         val services: List<String>,
-        val serviceDetails: Map<String, String> = emptyMap()
+        val serviceDetails: Map<String, String> = emptyMap(),
+        val photos: List<JobPhoto> = emptyList()
+    )
+
+    /** One row of the Photos tab: a job photo held in the shared Drive folder. */
+    data class JobPhoto(
+        val jobId: String,
+        val fileId: String,
+        val filename: String = "",
+        val url: String = "",
+        val uploadedAt: String = ""
     )
 
     suspend fun fetchAll(baseUrl: String, key: String = ""): RemoteData = withContext(Dispatchers.IO) {
@@ -74,7 +85,19 @@ object SheetApi {
             else (0 until svcArr.length())
                 .map { svcArr.getString(it) }.filter { it.isNotBlank() }
 
-            RemoteData(jobs, customers, apartments, services, serviceDetails)
+            val photoArr = obj.optJSONArray("photos") ?: JSONArray()
+            val photos = (0 until photoArr.length()).map { i ->
+                val p = photoArr.getJSONObject(i)
+                JobPhoto(
+                    jobId = p.optString("jobId"),
+                    fileId = p.optString("fileId"),
+                    filename = p.optString("filename"),
+                    url = p.optString("url"),
+                    uploadedAt = p.optString("uploadedAt")
+                )
+            }.filter { it.jobId.isNotBlank() && it.fileId.isNotBlank() }
+
+            RemoteData(jobs, customers, apartments, services, serviceDetails, photos)
         } finally {
             conn.disconnect()
         }
@@ -106,6 +129,24 @@ object SheetApi {
             }
         }
 
+    /** Download one job photo through the web app. Returns the JPEG bytes. */
+    suspend fun fetchPhoto(baseUrl: String, key: String, fileId: String): ByteArray? =
+        withContext(Dispatchers.IO) {
+            val keyed = withKey(baseUrl, key)
+            val url = keyed + (if ("?" in keyed) "&" else "?") +
+                "photo=" + URLEncoder.encode(fileId, "UTF-8")
+            val conn = open(url, "GET")
+            try {
+                val obj = JSONObject(conn.inputStream.bufferedReader().readText())
+                val b64 = obj.optString("data")
+                if (b64.isBlank()) null else Base64.decode(b64, Base64.DEFAULT)
+            } catch (_: Exception) {
+                null
+            } finally {
+                conn.disconnect()
+            }
+        }
+
     private fun withKey(baseUrl: String, key: String): String =
         if (key.isBlank()) baseUrl
         else baseUrl + (if ("?" in baseUrl) "&" else "?") + "key=" + URLEncoder.encode(key, "UTF-8")
@@ -128,6 +169,7 @@ object SheetApi {
         put("contractorPayable", j.contractorPayable ?: JSONObject.NULL)
         put("invoiced", j.invoiced); put("paid", j.paid)
         put("createdBy", j.createdBy); put("rawMessage", j.rawMessage)
+        put("rooms", j.rooms)
     }
 
     fun fromJson(o: JSONObject): Job = Job(
@@ -145,6 +187,7 @@ object SheetApi {
         invoiced = o.optBoolean("invoiced", false),
         paid = o.optBoolean("paid", false),
         createdBy = o.optString("createdBy"),
-        rawMessage = o.optString("rawMessage")
+        rawMessage = o.optString("rawMessage"),
+        rooms = o.optString("rooms")
     )
 }

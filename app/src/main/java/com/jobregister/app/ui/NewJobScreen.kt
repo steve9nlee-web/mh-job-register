@@ -69,6 +69,7 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
     var selApt by remember { mutableStateOf("") }
     var selUnit by remember { mutableStateOf("") }
     var selService by remember { mutableStateOf("") }
+    var selRoom by remember { mutableStateOf("") }
     var jobDesc by remember { mutableStateOf("") }
 
     val context = LocalContext.current
@@ -162,6 +163,15 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                                 )
                             }
                             Spacer(Modifier.height(6.dp))
+                            // How much of the unit the job covers — this is what
+                            // the cleaning sets are priced by.
+                            val roomOptions = listOf(
+                                "Not applicable", "Room 1", "Room 2", "Room 3", "Room All"
+                            )
+                            DropdownField("Room", roomOptions, selRoom) { i ->
+                                selRoom = if (i == 0) "" else roomOptions[i]
+                            }
+                            Spacer(Modifier.height(6.dp))
                             OutlinedTextField(
                                 value = jobDesc, onValueChange = { jobDesc = it },
                                 label = { Text("Notes (optional)") },
@@ -200,8 +210,8 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                             Spacer(Modifier.height(8.dp))
                             Button(
                                 onClick = {
-                                    vm.createJob(selUnit, selService, jobDesc, photoBytes)
-                                    jobDesc = ""; photoBytes = null
+                                    vm.createJob(selUnit, selService, jobDesc, photoBytes, selRoom)
+                                    jobDesc = ""; photoBytes = null; selRoom = ""
                                 },
                                 enabled = selUnit.isNotBlank() && selService.isNotBlank()
                             ) { Text("Create job${if (selUnit.isNotBlank()) " for $selUnit" else ""}") }
