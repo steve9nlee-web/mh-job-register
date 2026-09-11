@@ -48,7 +48,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 val roleTabs: List<Tab> = when (RoleConfig.role) {
     Role.ADMIN -> listOf(Tab.REGISTER, Tab.REVIEW, Tab.BILLING, Tab.PAYABLE, Tab.FOLLOW_UP)
     Role.CLEANER, Role.REPAIRER -> listOf(Tab.REGISTER, Tab.PAYABLE, Tab.SETTINGS)
-    Role.INITIATOR -> listOf(Tab.NEW_JOB, Tab.REGISTER, Tab.CUSTOMERS, Tab.FOLLOW_UP, Tab.SETTINGS)
+    Role.INITIATOR -> listOf(Tab.NEW_JOB, Tab.REGISTER, Tab.SETTINGS)
 }
 
 private val roleColor: Color = when (RoleConfig.role) {
@@ -103,7 +103,8 @@ fun App(vm: AppViewModel) {
                         onSettings = { showSettings = true },
                         onCustomers = if (RoleConfig.role == Role.ADMIN) {
                             { showCustomers = true }
-                        } else null)
+                        } else null,
+                        showFollowUpFilter = RoleConfig.role == Role.INITIATOR)
                     Tab.CUSTOMERS -> CustomersScreen(vm, content)
                     Tab.REVIEW -> ReviewScreen(vm, content)
                     Tab.BILLING -> BillingScreen(vm, content, onOpen = { selectedJobId = it })
