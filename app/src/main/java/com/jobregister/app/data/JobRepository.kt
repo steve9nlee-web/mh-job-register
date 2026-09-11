@@ -70,8 +70,14 @@ class JobRepository(context: Context) {
 
     fun get(id: String): Job? = _jobs.value.firstOrNull { it.id == id }
 
-    fun updateStatus(id: String, status: JobStatus, remarks: String) {
-        get(id)?.let { upsert(it.copy(status = status, remarks = remarks)) }
+    fun updateStatus(id: String, status: JobStatus, remarks: String, by: String = "") {
+        get(id)?.let {
+            upsert(it.copy(
+                status = status,
+                remarks = remarks,
+                updatedBy = by.ifBlank { it.updatedBy }
+            ))
+        }
     }
 
     /** Human review step: fix missing info and clear the AI flag. */

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,11 +25,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jobregister.app.RoleConfig
 import com.jobregister.app.model.Job
+import com.jobregister.app.model.JobCategory
 import com.jobregister.app.model.JobStatus
 import java.util.Locale
 
 fun money(v: Double?): String =
     if (v == null) "—" else String.format(Locale.US, "RM %.2f", v)
+
+/**
+ * Each trade gets its own pale card colour so a long list can be scanned
+ * by trade without reading a word of it.
+ */
+fun categoryColor(c: JobCategory): Color = when (c) {
+    JobCategory.AIRCON -> Color(0xFFE1F0FB)                          // light blue
+    JobCategory.CLEANING, JobCategory.DEEP_CLEANING -> Color(0xFFFCE4E4)  // light red
+    JobCategory.PEST_CONTROL -> Color(0xFFE4F3E6)                    // light green
+    JobCategory.PLUMBING -> Color(0xFFFBF3D0)                        // light yellow
+    else -> Color(0xFFF2F2F2)                                        // neutral
+}
 
 fun statusColor(s: JobStatus): Color = when (s) {
     JobStatus.COMPLETED -> Color(0xFF2E7D32)
@@ -67,7 +81,11 @@ fun LabelValue(label: String, value: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JobCard(job: Job, hasPhoto: Boolean = false, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = categoryColor(job.category)),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
         Column(Modifier.padding(12.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -96,7 +114,7 @@ fun JobCard(job: Job, hasPhoto: Boolean = false, onClick: () -> Unit) {
             }
             Text("${job.date}  ·  ${job.category.label}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                fontWeight = FontWeight.Medium)
             if (job.description.isNotBlank()) {
                 Text(job.description, style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2, modifier = Modifier.padding(top = 4.dp))

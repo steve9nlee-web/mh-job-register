@@ -16,4 +16,10 @@ class MainActivity : ComponentActivity() {
             App(viewModel)
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        // Catch up on jobs raised elsewhere while this app was in the background.
+        viewModel.refreshQuietly()
+    }
 }

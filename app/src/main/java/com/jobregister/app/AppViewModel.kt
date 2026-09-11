@@ -50,6 +50,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         get() = repo.userName
         set(value) { repo.userName = value }
 
+    init {
+        refreshQuietly()
+    }
+
     fun consumeMessage() { _message.value = null }
 
     /** Create a job for a registered customer unit picked from the dropdowns. */
@@ -138,8 +142,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun updateStatus(id: String, status: JobStatus, remarks: String) {
-        repo.updateStatus(id, status, remarks)
+        repo.updateStatus(id, status, remarks, userName.ifBlank { RoleConfig.role.name })
         repo.get(id)?.let { pushJob(it) }
+    }
+
+    /**
+     * Pull in the background with no snackbar. Used on launch and whenever
+     * the app comes back to the front, so a job raised on another phone
+     * turns up without anyone pressing sync.
+     */
+    fun refreshQuietly() {
+        viewModelScope.launch { repo.pull() }
     }
 
     fun resolveReview(id: String, unit: String, category: JobCategory, description: String) {

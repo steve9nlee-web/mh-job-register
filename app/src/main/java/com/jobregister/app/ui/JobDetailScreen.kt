@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -77,7 +78,12 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
         ) {
-            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = categoryColor(job.category)
+                ),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+            ) {
                 Column(Modifier.padding(12.dp)) {
                     SectionHeader("Job Details")
                     LabelValue("Date", job.date)
@@ -85,6 +91,11 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                     LabelValue("Category", job.category.label)
                     if (job.rooms.isNotBlank()) LabelValue("Room", job.rooms)
                     LabelValue("Status", job.status.label)
+                    // Who moved the status on — the contractor who did the
+                    // work, never the person who raised the job.
+                    if (job.updatedBy.isNotBlank()) {
+                        LabelValue("Status updated by", job.updatedBy)
+                    }
                     LabelValue("Description", job.description)
                     if (job.remarks.isNotBlank()) LabelValue("Remarks", job.remarks)
                     if (RoleConfig.canReviewFlags && job.rawMessage.isNotBlank()) {
