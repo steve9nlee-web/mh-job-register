@@ -129,10 +129,68 @@ function doGet(e) {
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
-/** POST {job} -> upsert one row by id. */
+function ok_() {
+  return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function findRow_(sheet, col, value) {
+  var v = sheet.getDataRange().getValues();
+  for (var r = 1; r < v.length; r++) {
+    if (String(v[r][col]) === String(value)) return r + 1;
+  }
+  return -1;
+}
+
+function handleCustomer_(d) {
+  if (!openSs_().getSheetByName(CUSTOMER_SHEET)) setupCustomerSheets();
+  var sheet = openSs_().getSheetByName(CUSTOMER_SHEET);
+  var row = findRow_(sheet, 1, d.unit); // match on unit column
+  if (d.action === 'delete') {
+    if (row > 0) sheet.deleteRow(row);
+    return ok_();
+  }
+  var values = [String(d.apartment || ''), String(d.unit || ''),
+    String(d.service || ''), String(d.customerName || ''),
+    String(d.phone || ''), String(d.remarks || '')];
+  if (row > 0) sheet.getRange(row, 1, 1, values.length).setValues([values]);
+  else sheet.appendRow(values);
+  return ok_();
+}
+
+function handleApartment_(d) {
+  if (!openSs_().getSheetByName(APARTMENT_SHEET)) setupCustomerSheets();
+  var sheet = openSs_().getSheetByName(APARTMENT_SHEET);
+  var row = findRow_(sheet, 0, d.code);
+  if (d.action === 'delete') {
+    if (row > 0) sheet.deleteRow(row);
+    return ok_();
+  }
+  if (row > 0) sheet.getRange(row, 1, 1, 2).setValues([[String(d.code), String(d.name || '')]]);
+  else sheet.appendRow([String(d.code), String(d.name || '')]);
+  return ok_();
+}
+
+function handleService_(d) {
+  if (!openSs_().getSheetByName(SERVICE_SHEET)) setupCustomerSheets();
+  var sheet = openSs_().getSheetByName(SERVICE_SHEET);
+  var row = findRow_(sheet, 0, d.name);
+  if (d.action === 'delete') {
+    if (row > 0) sheet.deleteRow(row);
+    return ok_();
+  }
+  if (row < 0) sheet.appendRow([String(d.name)]);
+  return ok_();
+}
+
+/** POST -> job upsert (default) or customer/apartment/service change. */
 function doPost(e) {
   if (!keyOk_(e)) return badKey_();
-  var job = JSON.parse(e.postData.contents);
+  var data = JSON.parse(e.postData.contents);
+  if (data.type === 'customer') return handleCustomer_(data);
+  if (data.type === 'apartment') return handleApartment_(data);
+  if (data.type === 'service') return handleService_(data);
+  var job = data;
   var sheet = getSheet_();
   var values = sheet.getDataRange().getValues();
   var rowIndex = -1;

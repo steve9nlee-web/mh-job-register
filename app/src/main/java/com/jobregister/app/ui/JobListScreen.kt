@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,7 +30,8 @@ fun JobListScreen(
     vm: AppViewModel,
     modifier: Modifier,
     onOpen: (String) -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onCustomers: (() -> Unit)? = null
 ) {
     val jobs by vm.jobs.collectAsState()
     val syncing by vm.syncing.collectAsState()
@@ -42,6 +44,11 @@ fun JobListScreen(
                 if (syncing) CircularProgressIndicator(Modifier.padding(12.dp))
                 else IconButton(onClick = { vm.sync() }) {
                     Icon(Icons.Filled.Sync, contentDescription = "Sync")
+                }
+                if (onCustomers != null) {
+                    IconButton(onClick = onCustomers) {
+                        Icon(Icons.Filled.Group, contentDescription = "Customer database")
+                    }
                 }
                 IconButton(onClick = onSettings) {
                     Icon(Icons.Filled.Settings, contentDescription = "Settings")

@@ -211,7 +211,7 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DropdownField(
+internal fun DropdownField(
     label: String,
     options: List<String>,
     selected: String,

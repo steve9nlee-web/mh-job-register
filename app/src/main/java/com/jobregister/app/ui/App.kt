@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Schedule
@@ -35,6 +36,7 @@ import com.jobregister.app.model.Role
 enum class Tab(val label: String, val icon: ImageVector) {
     NEW_JOB("New Job", Icons.Filled.AddComment),
     REGISTER("Jobs", Icons.AutoMirrored.Filled.Assignment),
+    CUSTOMERS("Customers", Icons.Filled.Group),
     REVIEW("Review", Icons.Filled.Flag),
     BILLING("Billing", Icons.Filled.ReceiptLong),
     PAYABLE("Pay", Icons.Filled.Payments),
@@ -46,7 +48,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 val roleTabs: List<Tab> = when (RoleConfig.role) {
     Role.ADMIN -> listOf(Tab.REGISTER, Tab.REVIEW, Tab.BILLING, Tab.PAYABLE, Tab.FOLLOW_UP)
     Role.CLEANER, Role.REPAIRER -> listOf(Tab.REGISTER, Tab.PAYABLE, Tab.SETTINGS)
-    Role.INITIATOR -> listOf(Tab.NEW_JOB, Tab.REGISTER, Tab.FOLLOW_UP, Tab.SETTINGS)
+    Role.INITIATOR -> listOf(Tab.NEW_JOB, Tab.REGISTER, Tab.CUSTOMERS, Tab.FOLLOW_UP, Tab.SETTINGS)
 }
 
 private val roleColor: Color = when (RoleConfig.role) {
@@ -62,6 +64,7 @@ fun App(vm: AppViewModel) {
         var currentTab by remember { mutableStateOf(roleTabs.first()) }
         var selectedJobId by remember { mutableStateOf<String?>(null) }
         var showSettings by remember { mutableStateOf(false) }
+        var showCustomers by remember { mutableStateOf(false) }
 
         val snackbar = remember { SnackbarHostState() }
         val message by vm.message.collectAsState()
@@ -72,7 +75,7 @@ fun App(vm: AppViewModel) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
-                if (selectedJobId == null && !showSettings && roleTabs.size > 1) {
+                if (selectedJobId == null && !showSettings && !showCustomers && roleTabs.size > 1) {
                     NavigationBar {
                         roleTabs.forEach { tab ->
                             NavigationBarItem(
@@ -89,6 +92,7 @@ fun App(vm: AppViewModel) {
             val content = Modifier.padding(padding)
             when {
                 showSettings -> SettingsScreen(vm, content) { showSettings = false }
+                showCustomers -> CustomersScreen(vm, content) { showCustomers = false }
                 selectedJobId != null -> JobDetailScreen(
                     vm, selectedJobId!!, content
                 ) { selectedJobId = null }
@@ -96,7 +100,11 @@ fun App(vm: AppViewModel) {
                     Tab.NEW_JOB -> NewJobScreen(vm, content)
                     Tab.REGISTER -> JobListScreen(vm, content,
                         onOpen = { selectedJobId = it },
-                        onSettings = { showSettings = true })
+                        onSettings = { showSettings = true },
+                        onCustomers = if (RoleConfig.role == Role.ADMIN) {
+                            { showCustomers = true }
+                        } else null)
+                    Tab.CUSTOMERS -> CustomersScreen(vm, content)
                     Tab.REVIEW -> ReviewScreen(vm, content)
                     Tab.BILLING -> BillingScreen(vm, content, onOpen = { selectedJobId = it })
                     Tab.PAYABLE -> PayableScreen(vm, content)

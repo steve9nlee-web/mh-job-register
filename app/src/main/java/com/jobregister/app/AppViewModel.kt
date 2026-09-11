@@ -12,6 +12,7 @@ import com.jobregister.app.model.JobStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.time.LocalDate
 import java.util.UUID
 
@@ -102,6 +103,65 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun markPaid(id: String, paid: Boolean) {
         repo.markPaid(id, paid)
         repo.get(id)?.let { pushJob(it) }
+    }
+
+    // ---- customer database management ----
+
+    private fun pushAction(body: JSONObject) {
+        viewModelScope.launch {
+            repo.pushAction(body)?.let { _message.value = "Saved locally; sync failed: $it" }
+        }
+    }
+
+    fun addCustomer(apartment: String, unit: String, service: String, name: String) {
+        repo.addCustomerLocal(Customer(apartment, unit, service, name))
+        pushAction(JSONObject().apply {
+            put("type", "customer"); put("action", "add")
+            put("apartment", apartment); put("unit", unit)
+            put("service", service); put("customerName", name)
+        })
+        _message.value = "Customer $unit saved"
+    }
+
+    fun deleteCustomer(unit: String) {
+        repo.deleteCustomerLocal(unit)
+        pushAction(JSONObject().apply {
+            put("type", "customer"); put("action", "delete"); put("unit", unit)
+        })
+        _message.value = "Customer $unit deleted"
+    }
+
+    fun addApartment(code: String, name: String) {
+        repo.addApartmentLocal(code, name)
+        pushAction(JSONObject().apply {
+            put("type", "apartment"); put("action", "add")
+            put("code", code); put("name", name)
+        })
+        _message.value = "Apartment $code saved"
+    }
+
+    fun deleteApartment(code: String) {
+        repo.deleteApartmentLocal(code)
+        pushAction(JSONObject().apply {
+            put("type", "apartment"); put("action", "delete"); put("code", code)
+        })
+        _message.value = "Apartment $code deleted"
+    }
+
+    fun addService(name: String) {
+        repo.addServiceLocal(name)
+        pushAction(JSONObject().apply {
+            put("type", "service"); put("action", "add"); put("name", name)
+        })
+        _message.value = "Service saved"
+    }
+
+    fun deleteService(name: String) {
+        repo.deleteServiceLocal(name)
+        pushAction(JSONObject().apply {
+            put("type", "service"); put("action", "delete"); put("name", name)
+        })
+        _message.value = "Service deleted"
     }
 
     fun sync() {

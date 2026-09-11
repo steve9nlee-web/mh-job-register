@@ -79,6 +79,20 @@ object SheetApi {
         }
     }
 
+    /** POST an arbitrary action body (customer/apartment/service changes). */
+    suspend fun postAction(baseUrl: String, key: String, body: JSONObject): Unit =
+        withContext(Dispatchers.IO) {
+            val conn = open(withKey(baseUrl, key), "POST")
+            try {
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.outputStream.use { it.write(body.toString().toByteArray()) }
+                conn.inputStream.bufferedReader().readText()
+            } finally {
+                conn.disconnect()
+            }
+        }
+
     private fun withKey(baseUrl: String, key: String): String =
         if (key.isBlank()) baseUrl
         else baseUrl + (if ("?" in baseUrl) "&" else "?") + "key=" + URLEncoder.encode(key, "UTF-8")

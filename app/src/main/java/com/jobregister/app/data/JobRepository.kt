@@ -127,6 +127,50 @@ class JobRepository(context: Context) {
         }
     }
 
+    // ---- customer database mutations (optimistic local + push) ----
+
+    fun addCustomerLocal(c: Customer) {
+        _customers.value = _customers.value.filterNot { it.unit == c.unit } + c
+        persistDirectory()
+    }
+
+    fun deleteCustomerLocal(unit: String) {
+        _customers.value = _customers.value.filterNot { it.unit == unit }
+        persistDirectory()
+    }
+
+    fun addApartmentLocal(code: String, name: String) {
+        _apartments.value = _apartments.value + (code to name)
+        persistDirectory()
+    }
+
+    fun deleteApartmentLocal(code: String) {
+        _apartments.value = _apartments.value - code
+        persistDirectory()
+    }
+
+    fun addServiceLocal(name: String) {
+        if (_services.value.none { it.equals(name, ignoreCase = true) }) {
+            _services.value = _services.value + name
+            persistDirectory()
+        }
+    }
+
+    fun deleteServiceLocal(name: String) {
+        _services.value = _services.value.filterNot { it.equals(name, ignoreCase = true) }
+        persistDirectory()
+    }
+
+    suspend fun pushAction(body: JSONObject): String? {
+        val url = syncUrl
+        if (url.isBlank()) return null
+        return try {
+            SheetApi.postAction(url, syncKey, body); null
+        } catch (e: Exception) {
+            e.message ?: "Push failed"
+        }
+    }
+
     // ---- local persistence ----
 
     private fun persist() {
