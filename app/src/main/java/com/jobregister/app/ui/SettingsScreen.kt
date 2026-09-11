@@ -32,6 +32,7 @@ import com.jobregister.app.RoleConfig
 fun SettingsScreen(vm: AppViewModel, modifier: Modifier, onClose: (() -> Unit)?) {
     var name by remember { mutableStateOf(vm.userName) }
     var url by remember { mutableStateOf(vm.syncUrl) }
+    var key by remember { mutableStateOf(vm.syncKey) }
 
     Column(modifier.fillMaxSize()) {
         TopAppBar(
@@ -64,14 +65,22 @@ fun SettingsScreen(vm: AppViewModel, modifier: Modifier, onClose: (() -> Unit)?)
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
                 value = url, onValueChange = { url = it },
-                label = { Text("Job Register sync URL (Apps Script)") },
-                supportingText = { Text("Deploy backend/Code.gs as a web app and paste its URL here. Leave empty for offline mode.") },
+                label = { Text("Sync server URL") },
+                supportingText = { Text("Pre-filled with the shared MH server — only change if the server moves.") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = key, onValueChange = { key = it },
+                label = { Text("Sync key") },
+                supportingText = { Text("Must match the key on the server. Same key on every phone.") },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(12.dp))
             Button(onClick = {
                 vm.userName = name
                 vm.syncUrl = url
+                vm.syncKey = key
                 vm.sync()
             }) { Text("Save & sync") }
         }

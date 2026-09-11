@@ -55,8 +55,13 @@ gradle assembleAdminRelease   # just one flavor
 
 ## Connecting all apps to one Job Register spreadsheet
 
-The apps work offline out of the box (sample data, stored on the phone). To
-make all phones share the same live Job Register:
+**The APKs ship pre-configured**: the sync server URL and sync key are built
+in (see `DEFAULT_SYNC_URL` / `DEFAULT_SYNC_KEY` in `app/build.gradle.kts`), so
+a freshly installed app syncs to the shared Job Register with zero setup.
+Settings can override both per phone. The Apps Script backend checks the key
+(`SYNC_KEY` in `backend/Code.gs`) — keep the two values in sync.
+
+If you ever need to re-deploy the backend from scratch:
 
 1. Open your Job Register spreadsheet in Google Sheets.
 2. Extensions → Apps Script → paste [`backend/Code.gs`](backend/Code.gs) → save.

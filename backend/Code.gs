@@ -24,6 +24,11 @@
 // redundant but harmless; it also lets the script run as a standalone project.
 var SPREADSHEET_ID = '11htg51uUpOA2nH2xmR3apRA7nN-7Dn8HSy_KDn4Bl7k';
 
+// Shared sync key: every app sends ?key=... and it must match this value.
+// Change it here AND in the apps' Settings (or app/build.gradle.kts default)
+// together. Leave '' to accept requests without a key (not recommended).
+var SYNC_KEY = 'MH-SYNC-2026';
+
 var SHEET_NAME = 'JobRegister';
 var HEADERS = ['id', 'date', 'unit', 'category', 'description', 'status',
   'needsReview', 'reviewReason', 'remarks', 'customerCharge',
@@ -45,8 +50,18 @@ function getSheet_() {
   return sheet;
 }
 
+function keyOk_(e) {
+  return !SYNC_KEY || (e && e.parameter && e.parameter.key === SYNC_KEY);
+}
+
+function badKey_() {
+  return ContentService.createTextOutput(JSON.stringify({ error: 'Invalid sync key' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 /** GET -> all jobs as JSON. */
-function doGet() {
+function doGet(e) {
+  if (!keyOk_(e)) return badKey_();
   var sheet = getSheet_();
   var values = sheet.getDataRange().getValues();
   var jobs = [];
@@ -71,6 +86,7 @@ function doGet() {
 
 /** POST {job} -> upsert one row by id. */
 function doPost(e) {
+  if (!keyOk_(e)) return badKey_();
   var job = JSON.parse(e.postData.contents);
   var sheet = getSheet_();
   var values = sheet.getDataRange().getValues();

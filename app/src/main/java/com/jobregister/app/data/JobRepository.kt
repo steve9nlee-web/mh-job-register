@@ -1,6 +1,7 @@
 package com.jobregister.app.data
 
 import android.content.Context
+import com.jobregister.app.BuildConfig
 import com.jobregister.app.model.Job
 import com.jobregister.app.model.JobCategory
 import com.jobregister.app.model.JobStatus
@@ -24,8 +25,14 @@ class JobRepository(context: Context) {
     val jobs: StateFlow<List<Job>> = _jobs
 
     var syncUrl: String
-        get() = prefs.getString("sync_url", "") ?: ""
+        get() = prefs.getString("sync_url", null)?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.DEFAULT_SYNC_URL
         set(value) { prefs.edit().putString("sync_url", value.trim()).apply() }
+
+    var syncKey: String
+        get() = prefs.getString("sync_key", null)?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.DEFAULT_SYNC_KEY
+        set(value) { prefs.edit().putString("sync_key", value.trim()).apply() }
 
     var userName: String
         get() = prefs.getString("user_name", "") ?: ""
@@ -84,7 +91,7 @@ class JobRepository(context: Context) {
         val url = syncUrl
         if (url.isBlank()) return "No sync URL set (Settings)"
         return try {
-            val remote = SheetApi.fetchJobs(url)
+            val remote = SheetApi.fetchJobs(url, syncKey)
             val remoteIds = remote.map { it.id }.toSet()
             _jobs.value = remote + _jobs.value.filterNot { it.id in remoteIds }
             persist()
@@ -99,7 +106,7 @@ class JobRepository(context: Context) {
         val url = syncUrl
         if (url.isBlank()) return null // local-only mode is fine
         return try {
-            SheetApi.upsertJob(url, job); null
+            SheetApi.upsertJob(url, syncKey, job); null
         } catch (e: Exception) {
             e.message ?: "Push failed"
         }

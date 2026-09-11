@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 /**
  * Thin JSON client for the Google Apps Script web app that fronts the
@@ -19,19 +20,21 @@ import java.net.URL
  */
 object SheetApi {
 
-    suspend fun fetchJobs(baseUrl: String): List<Job> = withContext(Dispatchers.IO) {
-        val conn = open(baseUrl, "GET")
+    suspend fun fetchJobs(baseUrl: String, key: String = ""): List<Job> = withContext(Dispatchers.IO) {
+        val conn = open(withKey(baseUrl, key), "GET")
         try {
             val body = conn.inputStream.bufferedReader().readText()
-            val arr = JSONObject(body).optJSONArray("jobs") ?: JSONArray()
+            val obj = JSONObject(body)
+            if (obj.has("error")) throw IllegalStateException(obj.getString("error"))
+            val arr = obj.optJSONArray("jobs") ?: JSONArray()
             (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
         } finally {
             conn.disconnect()
         }
     }
 
-    suspend fun upsertJob(baseUrl: String, job: Job): Unit = withContext(Dispatchers.IO) {
-        val conn = open(baseUrl, "POST")
+    suspend fun upsertJob(baseUrl: String, key: String, job: Job): Unit = withContext(Dispatchers.IO) {
+        val conn = open(withKey(baseUrl, key), "POST")
         try {
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
@@ -41,6 +44,10 @@ object SheetApi {
             conn.disconnect()
         }
     }
+
+    private fun withKey(baseUrl: String, key: String): String =
+        if (key.isBlank()) baseUrl
+        else baseUrl + (if ("?" in baseUrl) "&" else "?") + "key=" + URLEncoder.encode(key, "UTF-8")
 
     private fun open(url: String, method: String): HttpURLConnection {
         val conn = URL(url).openConnection() as HttpURLConnection

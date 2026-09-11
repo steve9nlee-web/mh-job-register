@@ -28,6 +28,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         get() = repo.syncUrl
         set(value) { repo.syncUrl = value }
 
+    var syncKey: String
+        get() = repo.syncKey
+        set(value) { repo.syncKey = value }
+
     var userName: String
         get() = repo.userName
         set(value) { repo.userName = value }
