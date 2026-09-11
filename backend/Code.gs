@@ -148,6 +148,26 @@ function findRow_(sheet, col, value) {
   return -1;
 }
 
+// Save an uploaded job photo (base64 JPEG) into the Drive folder and log it
+// on the Photos tab with job no and upload time.
+function handlePhoto_(d) {
+  var name = String(d.filename || ('photo_' + Date.now() + '.jpg'));
+  var blob = Utilities.newBlob(Utilities.base64Decode(String(d.data)), 'image/jpeg', name);
+  var file = DriveApp.getFolderById(PHOTO_FOLDER_ID).createFile(blob);
+  var ss = openSs_();
+  var ps = ss.getSheetByName(PHOTO_SHEET);
+  if (!ps) {
+    ps = ss.insertSheet(PHOTO_SHEET);
+    ps.appendRow(['jobId', 'filename', 'driveUrl', 'uploadedAt']);
+    ps.setFrozenRows(1);
+  }
+  ps.appendRow([
+    String(d.jobId || ''), name, file.getUrl(),
+    Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
+  ]);
+  return ok_();
+}
+
 function handleCustomer_(d) {
   if (!openSs_().getSheetByName(CUSTOMER_SHEET)) setupCustomerSheets();
   var sheet = openSs_().getSheetByName(CUSTOMER_SHEET);
@@ -273,6 +293,7 @@ function ensureServicePackages_(sheet) {
 function doPost(e) {
   if (!keyOk_(e)) return badKey_();
   var data = JSON.parse(e.postData.contents);
+  if (data.type === 'photo') return handlePhoto_(data);
   if (data.type === 'customer') return handleCustomer_(data);
   if (data.type === 'apartment') return handleApartment_(data);
   if (data.type === 'service') return handleService_(data);
@@ -317,6 +338,10 @@ function formatDate_(v) {
 //                 Add a row: right-click a row number > Insert row, fill it in.
 //                 Delete a row: right-click > Delete row.
 // ---------------------------------------------------------------------------
+
+// Google Drive folder that receives job photos uploaded from the apps.
+var PHOTO_FOLDER_ID = '1TZZteVqmOYNGy1LtaNSN_HmMmipqAvoa';
+var PHOTO_SHEET = 'Photos';
 
 var CUSTOMER_SHEET = 'Customers';
 var APARTMENT_SHEET = 'Apartments';

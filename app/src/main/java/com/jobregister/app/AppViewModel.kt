@@ -12,8 +12,12 @@ import com.jobregister.app.model.JobStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import android.util.Base64
+import com.jobregister.app.util.PhotoUtil
 import org.json.JSONObject
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -47,7 +51,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun consumeMessage() { _message.value = null }
 
     /** Create a job for a registered customer unit picked from the dropdowns. */
-    fun createJob(unit: String, service: String, description: String) {
+    fun createJob(unit: String, service: String, description: String, photo: ByteArray? = null) {
         val category = when {
             service.contains("clean", ignoreCase = true) -> JobCategory.CLEANING
             service.contains("air", ignoreCase = true) -> JobCategory.AIRCON
@@ -64,7 +68,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             description = desc,
             status = JobStatus.PENDING,
             createdBy = userName.ifBlank { RoleConfig.role.name }
-        ))
+        ).also { job ->
+            if (photo != null) uploadPhoto(job.id, photo)
+        })
+    }
+
+    /** Stamp the photo with job no + date/time and upload it to the Drive folder. */
+    fun uploadPhoto(jobId: String, bytes: ByteArray) {
+        viewModelScope.launch {
+            val now = LocalDateTime.now()
+            val label = "$jobId  " + now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+            val stamped = PhotoUtil.stamp(bytes, label)
+            val filename = jobId + "_" + now.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".jpg"
+            _message.value = "Uploading photo…"
+            val err = repo.pushAction(JSONObject().apply {
+                put("type", "photo"); put("jobId", jobId)
+                put("filename", filename)
+                put("data", Base64.encodeToString(stamped, Base64.NO_WRAP))
+            })
+            _message.value = if (err == null) "Photo uploaded to Drive" else "Photo upload failed: $err"
+        }
     }
 
     /** AI conversion step: raw WhatsApp text -> job row (not yet saved). */

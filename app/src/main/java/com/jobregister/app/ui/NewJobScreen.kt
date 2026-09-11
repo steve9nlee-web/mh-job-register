@@ -61,9 +61,22 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
     var showServiceInfo by remember { mutableStateOf(false) }
     var selApt by remember { mutableStateOf("") }
     var selUnit by remember { mutableStateOf("") }
-    var manualUnit by remember { mutableStateOf("") }
     var selService by remember { mutableStateOf("") }
     var jobDesc by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    var photoBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    val takePicture = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { ok ->
+        if (ok) cameraUri?.let { uri -> photoBytes = PhotoUtil.compress(context, uri) }
+    }
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { photoBytes = PhotoUtil.compress(context, it) }
+    }
 
     Column(modifier.fillMaxSize()) {
         TopAppBar(
@@ -86,9 +99,9 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
-                            // All apartments from the Apartments tab, plus any
-                            // apartment codes that appear in the customer list.
-                            val aptCodes = (apartments.keys + customers.map { it.apartment })
+                            // Only apartments with registered customer units;
+                            // new units are added by the admin in Customer Database.
+                            val aptCodes = customers.map { it.apartment }
                                 .filter { it.isNotBlank() }.distinct().sorted()
                             val aptLabels = aptCodes.map { c ->
                                 apartments[c]?.takeIf { it.isNotBlank() }?.let { "$c — $it" } ?: c
@@ -102,22 +115,12 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
 
                             val units = customers.filter { it.apartment == selApt }
                                 .map { it.unit }.distinct().sorted()
-                            if (units.isNotEmpty()) {
-                                DropdownField("Unit (registered customers)", units, selUnit) { i ->
-                                    selUnit = units[i]
-                                    manualUnit = ""
-                                    customers.firstOrNull { it.unit == selUnit }
-                                        ?.service?.takeIf { it.isNotBlank() }
-                                        ?.let { selService = it }
-                                }
-                                Spacer(Modifier.height(6.dp))
+                            DropdownField("Unit", units, selUnit) { i ->
+                                selUnit = units[i]
+                                customers.firstOrNull { it.unit == selUnit }
+                                    ?.service?.takeIf { it.isNotBlank() }
+                                    ?.let { selService = it }
                             }
-                            OutlinedTextField(
-                                value = manualUnit,
-                                onValueChange = { manualUnit = it; if (it.isNotBlank()) selUnit = "" },
-                                label = { Text(if (units.isEmpty()) "Unit no (e.g. 19-11)" else "Or type unit no") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
                             Spacer(Modifier.height(6.dp))
 
                             val serviceOptions = services.ifEmpty {
@@ -158,20 +161,43 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(Modifier.height(8.dp))
-                            val typed = manualUnit.trim().uppercase()
-                            val finalUnit = when {
-                                typed.isBlank() -> selUnit
-                                Regex("^[A-Z]{1,3}-").containsMatchIn(typed) -> typed
-                                selApt.isNotBlank() -> "$selApt-$typed"
-                                else -> typed
+                            SectionHeader("Photo (optional)")
+                            Row {
+                                OutlinedButton(onClick = {
+                                    val file = File(
+                                        context.cacheDir,
+                                        "job_photo_${System.currentTimeMillis()}.jpg"
+                                    )
+                                    val uri = FileProvider.getUriForFile(
+                                        context, context.packageName + ".fileprovider", file
+                                    )
+                                    cameraUri = uri
+                                    takePicture.launch(uri)
+                                }) { Text("📷 Take photo") }
+                                Spacer(Modifier.width(8.dp))
+                                OutlinedButton(onClick = { pickImage.launch("image/*") }) {
+                                    Text("🖼 Upload")
+                                }
                             }
+                            photoBytes?.let { bytes ->
+                                Row {
+                                    Text(
+                                        "✓ Photo attached (${bytes.size / 1024} KB) — saved to Drive with job no & time stamp on create",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedButton(onClick = { photoBytes = null }) { Text("Remove") }
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
                             Button(
                                 onClick = {
-                                    vm.createJob(finalUnit, selService, jobDesc)
-                                    jobDesc = ""; manualUnit = ""
+                                    vm.createJob(selUnit, selService, jobDesc, photoBytes)
+                                    jobDesc = ""; photoBytes = null
                                 },
-                                enabled = finalUnit.isNotBlank() && selService.isNotBlank()
-                            ) { Text("Create job${if (finalUnit.isNotBlank()) " for $finalUnit" else ""}") }
+                                enabled = selUnit.isNotBlank() && selService.isNotBlank()
+                            ) { Text("Create job${if (selUnit.isNotBlank()) " for $selUnit" else ""}") }
                         }
                     }
                 }
