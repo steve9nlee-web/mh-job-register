@@ -54,6 +54,7 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
     val services by vm.services.collectAsState()
     var selApt by remember { mutableStateOf("") }
     var selUnit by remember { mutableStateOf("") }
+    var manualUnit by remember { mutableStateOf("") }
     var selService by remember { mutableStateOf("") }
     var jobDesc by remember { mutableStateOf("") }
 
@@ -71,14 +72,16 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         SectionHeader("Create job — pick a unit")
-                        if (customers.isEmpty()) {
+                        if (customers.isEmpty() && apartments.isEmpty()) {
                             Text(
                                 "No customer list loaded yet — tap the sync icon (top right) to fetch it from the database.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         } else {
-                            val aptCodes = customers.map { it.apartment }
+                            // All apartments from the Apartments tab, plus any
+                            // apartment codes that appear in the customer list.
+                            val aptCodes = (apartments.keys + customers.map { it.apartment })
                                 .filter { it.isNotBlank() }.distinct().sorted()
                             val aptLabels = aptCodes.map { c ->
                                 apartments[c]?.takeIf { it.isNotBlank() }?.let { "$c — $it" } ?: c
@@ -92,12 +95,22 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
 
                             val units = customers.filter { it.apartment == selApt }
                                 .map { it.unit }.distinct().sorted()
-                            DropdownField("Unit", units, selUnit) { i ->
-                                selUnit = units[i]
-                                customers.firstOrNull { it.unit == selUnit }
-                                    ?.service?.takeIf { it.isNotBlank() }
-                                    ?.let { selService = it }
+                            if (units.isNotEmpty()) {
+                                DropdownField("Unit (registered customers)", units, selUnit) { i ->
+                                    selUnit = units[i]
+                                    manualUnit = ""
+                                    customers.firstOrNull { it.unit == selUnit }
+                                        ?.service?.takeIf { it.isNotBlank() }
+                                        ?.let { selService = it }
+                                }
+                                Spacer(Modifier.height(6.dp))
                             }
+                            OutlinedTextField(
+                                value = manualUnit,
+                                onValueChange = { manualUnit = it; if (it.isNotBlank()) selUnit = "" },
+                                label = { Text(if (units.isEmpty()) "Unit no (e.g. 19-11)" else "Or type unit no") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                             Spacer(Modifier.height(6.dp))
 
                             val serviceOptions = services.ifEmpty {
@@ -113,13 +126,20 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(Modifier.height(8.dp))
+                            val typed = manualUnit.trim().uppercase()
+                            val finalUnit = when {
+                                typed.isBlank() -> selUnit
+                                Regex("^[A-Z]{1,3}-").containsMatchIn(typed) -> typed
+                                selApt.isNotBlank() -> "$selApt-$typed"
+                                else -> typed
+                            }
                             Button(
                                 onClick = {
-                                    vm.createJob(selUnit, selService, jobDesc)
-                                    jobDesc = ""
+                                    vm.createJob(finalUnit, selService, jobDesc)
+                                    jobDesc = ""; manualUnit = ""
                                 },
-                                enabled = selUnit.isNotBlank() && selService.isNotBlank()
-                            ) { Text("Create job") }
+                                enabled = finalUnit.isNotBlank() && selService.isNotBlank()
+                            ) { Text("Create job${if (finalUnit.isNotBlank()) " for $finalUnit" else ""}") }
                         }
                     }
                 }
