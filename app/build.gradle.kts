@@ -12,14 +12,14 @@ android {
         applicationId = "com.jobregister.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
 
         // Built-in sync server: every APK ships pointing at the shared Job
         // Register backend, so phones sync with zero setup. Both values can
         // still be changed per phone in Settings.
         buildConfigField("String", "DEFAULT_SYNC_URL",
-            "\"https://script.google.com/macros/s/AKfycbxIRQ9wL5Zv_e2eybLtOglE4wgyC99NQNagzoIK7kOjkgLLNXJrZrjE6J7kxNLKJIXJ/exec\"")
+            "\"https://script.google.com/macros/s/AKfycbwoEWfUHwjjzNASCicpbcukR-MrCLZu66vDA3TExNj0GhfUXWJLOksBDnLL6G0LKmso/exec\"")
         buildConfigField("String", "DEFAULT_SYNC_KEY", "\"MH-SYNC-2026\"")
     }
 

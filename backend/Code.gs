@@ -65,6 +65,8 @@ function badKey_() {
 /** GET -> all jobs as JSON. */
 function doGet(e) {
   if (!keyOk_(e)) return badKey_();
+  // Auto-create the customer database tabs on first use.
+  if (!openSs_().getSheetByName(CUSTOMER_SHEET)) setupCustomerSheets();
   var sheet = getSheet_();
   var values = sheet.getDataRange().getValues();
   var jobs = [];
