@@ -21,6 +21,7 @@ enum class JobCategory(val label: String, val isCleaning: Boolean) {
     PLUMBING("Plumbing", false),
     ELECTRICAL("Electrical", false),
     AIRCON("Aircon Service", false),
+    PEST_CONTROL("Pest Control", false),
     GENERAL_REPAIR("General Repair", false),
     UNKNOWN("Unclassified", false);
 
@@ -56,6 +57,14 @@ data class Job(
         get() = status == JobStatus.PENDING || status == JobStatus.WAITING || status == JobStatus.NOT_COMPLETED
 }
 
+/** A registered customer unit from the Customers tab of the spreadsheet. */
+data class Customer(
+    val apartment: String,     // e.g. "L", "OV"
+    val unit: String,          // e.g. "L-19-11"
+    val service: String = "",  // e.g. "Cleaning"
+    val customerName: String = ""
+)
+
 /** Rate card row: what the customer pays and what the contractor receives. */
 data class Rate(
     val category: JobCategory,
@@ -70,6 +79,7 @@ object RateCard {
         Rate(JobCategory.PLUMBING, 150.0, 100.0),
         Rate(JobCategory.ELECTRICAL, 160.0, 110.0),
         Rate(JobCategory.AIRCON, 140.0, 95.0),
+        Rate(JobCategory.PEST_CONTROL, 150.0, 100.0),
         Rate(JobCategory.GENERAL_REPAIR, 120.0, 80.0)
     )
 

@@ -12,8 +12,8 @@ android {
         applicationId = "com.jobregister.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
 
         // Built-in sync server: every APK ships pointing at the shared Job
         // Register backend, so phones sync with zero setup. Both values can

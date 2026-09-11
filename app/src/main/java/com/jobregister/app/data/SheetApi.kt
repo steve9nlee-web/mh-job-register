@@ -1,5 +1,6 @@
 package com.jobregister.app.data
 
+import com.jobregister.app.model.Customer
 import com.jobregister.app.model.Job
 import com.jobregister.app.model.JobCategory
 import com.jobregister.app.model.JobStatus
@@ -20,14 +21,47 @@ import java.net.URLEncoder
  */
 object SheetApi {
 
-    suspend fun fetchJobs(baseUrl: String, key: String = ""): List<Job> = withContext(Dispatchers.IO) {
+    data class RemoteData(
+        val jobs: List<Job>,
+        val customers: List<Customer>,
+        val apartments: Map<String, String>,
+        val services: List<String>
+    )
+
+    suspend fun fetchAll(baseUrl: String, key: String = ""): RemoteData = withContext(Dispatchers.IO) {
         val conn = open(withKey(baseUrl, key), "GET")
         try {
             val body = conn.inputStream.bufferedReader().readText()
             val obj = JSONObject(body)
             if (obj.has("error")) throw IllegalStateException(obj.getString("error"))
-            val arr = obj.optJSONArray("jobs") ?: JSONArray()
-            (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
+
+            val jobsArr = obj.optJSONArray("jobs") ?: JSONArray()
+            val jobs = (0 until jobsArr.length()).map { fromJson(jobsArr.getJSONObject(it)) }
+
+            val custArr = obj.optJSONArray("customers") ?: JSONArray()
+            val customers = (0 until custArr.length()).map { i ->
+                val c = custArr.getJSONObject(i)
+                Customer(
+                    apartment = c.optString("apartment"),
+                    unit = c.optString("unit"),
+                    service = c.optString("service"),
+                    customerName = c.optString("customerName")
+                )
+            }.filter { it.unit.isNotBlank() }
+
+            val aptArr = obj.optJSONArray("apartments") ?: JSONArray()
+            val apartments = mutableMapOf<String, String>()
+            for (i in 0 until aptArr.length()) {
+                val a = aptArr.getJSONObject(i)
+                val code = a.optString("code")
+                if (code.isNotBlank()) apartments[code] = a.optString("name")
+            }
+
+            val svcArr = obj.optJSONArray("services") ?: JSONArray()
+            val services = (0 until svcArr.length())
+                .map { svcArr.getString(it) }.filter { it.isNotBlank() }
+
+            RemoteData(jobs, customers, apartments, services)
         } finally {
             conn.disconnect()
         }

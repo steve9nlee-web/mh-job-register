@@ -62,6 +62,7 @@ object MessageParser {
         JobCategory.PLUMBING to listOf("plumb", "plumbing", "pipe", "leak", "tap", "toilet", "clog", "choke", "sink", "paip"),
         JobCategory.ELECTRICAL to listOf("electric", "eletric", "wiring", "socket", "light", "lamp", "fuse", "trip", "power"),
         JobCategory.AIRCON to listOf("aircon", "air con", "air-con", "ac service", "aircond", "chemical wash", "gas top"),
+        JobCategory.PEST_CONTROL to listOf("pest", "lipas", "cockroach", "roach", "semut", "tikus", "termite", "anai-anai"),
         JobCategory.GENERAL_REPAIR to listOf("repair", "repare", "fix", "broken", "rosak", "door", "lock", "hinge", "window", "cabinet")
     )
 

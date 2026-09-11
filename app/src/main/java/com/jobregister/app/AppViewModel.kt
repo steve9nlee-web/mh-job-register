@@ -5,18 +5,24 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jobregister.app.ai.MessageParser
 import com.jobregister.app.data.JobRepository
+import com.jobregister.app.model.Customer
 import com.jobregister.app.model.Job
 import com.jobregister.app.model.JobCategory
 import com.jobregister.app.model.JobStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.util.UUID
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = JobRepository.get(app)
 
     val jobs: StateFlow<List<Job>> = repo.jobs
+    val customers: StateFlow<List<Customer>> = repo.customers
+    val apartments: StateFlow<Map<String, String>> = repo.apartments
+    val services: StateFlow<List<String>> = repo.services
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
@@ -37,6 +43,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         set(value) { repo.userName = value }
 
     fun consumeMessage() { _message.value = null }
+
+    /** Create a job for a registered customer unit picked from the dropdowns. */
+    fun createJob(unit: String, service: String, description: String) {
+        val category = when {
+            service.contains("clean", ignoreCase = true) -> JobCategory.CLEANING
+            service.contains("air", ignoreCase = true) -> JobCategory.AIRCON
+            service.contains("pest", ignoreCase = true) -> JobCategory.PEST_CONTROL
+            else -> JobCategory.GENERAL_REPAIR
+        }
+        val desc = if (description.isBlank()) service else "$service — $description"
+        saveJob(Job(
+            id = "J-" + UUID.randomUUID().toString().take(8).uppercase(),
+            date = LocalDate.now().toString(),
+            unit = unit,
+            category = category,
+            description = desc,
+            status = JobStatus.PENDING,
+            createdBy = userName.ifBlank { RoleConfig.role.name }
+        ))
+    }
 
     /** AI conversion step: raw WhatsApp text -> job row (not yet saved). */
     fun parseMessage(raw: String): Job =

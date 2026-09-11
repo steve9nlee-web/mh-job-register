@@ -85,8 +85,48 @@ function doGet(e) {
     job.contractorPayable = row[10] === '' ? null : Number(row[10]);
     jobs.push(job);
   }
-  return ContentService.createTextOutput(JSON.stringify({ jobs: jobs }))
-    .setMimeType(ContentService.MimeType.JSON);
+  var ss = openSs_();
+
+  var customers = [];
+  var cs = ss.getSheetByName(CUSTOMER_SHEET);
+  if (cs) {
+    var cv = cs.getDataRange().getValues();
+    for (var ci = 1; ci < cv.length; ci++) {
+      if (!cv[ci][1]) continue;
+      customers.push({
+        apartment: String(cv[ci][0] || ''),
+        unit: String(cv[ci][1] || ''),
+        service: String(cv[ci][2] || ''),
+        customerName: String(cv[ci][3] || '')
+      });
+    }
+  }
+
+  var apartments = [];
+  var ap = ss.getSheetByName(APARTMENT_SHEET);
+  if (ap) {
+    var av = ap.getDataRange().getValues();
+    for (var ai = 1; ai < av.length; ai++) {
+      if (!av[ai][0]) continue;
+      apartments.push({ code: String(av[ai][0]), name: String(av[ai][1] || '') });
+    }
+  }
+
+  var services = [];
+  var sv = ss.getSheetByName(SERVICE_SHEET);
+  if (sv) {
+    var svv = sv.getDataRange().getValues();
+    for (var si = 1; si < svv.length; si++) {
+      if (svv[si][0]) services.push(String(svv[si][0]));
+    }
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({
+    jobs: jobs,
+    customers: customers,
+    apartments: apartments,
+    services: services
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 /** POST {job} -> upsert one row by id. */

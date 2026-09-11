@@ -10,15 +10,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,12 +49,84 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
     var rawText by remember { mutableStateOf("") }
     var parsed by remember { mutableStateOf<List<Job>>(emptyList()) }
 
+    val customers by vm.customers.collectAsState()
+    val apartments by vm.apartments.collectAsState()
+    val services by vm.services.collectAsState()
+    var selApt by remember { mutableStateOf("") }
+    var selUnit by remember { mutableStateOf("") }
+    var selService by remember { mutableStateOf("") }
+    var jobDesc by remember { mutableStateOf("") }
+
     Column(modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("New Job — WhatsApp Intake") })
+        TopAppBar(
+            title = { Text("New Job") },
+            actions = {
+                IconButton(onClick = { vm.sync() }) {
+                    Icon(Icons.Filled.Sync, contentDescription = "Sync customer list")
+                }
+            }
+        )
         LazyColumn(Modifier.padding(horizontal = 16.dp)) {
             item {
+                Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        SectionHeader("Create job — pick a unit")
+                        if (customers.isEmpty()) {
+                            Text(
+                                "No customer list loaded yet — tap the sync icon (top right) to fetch it from the database.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            val aptCodes = customers.map { it.apartment }
+                                .filter { it.isNotBlank() }.distinct().sorted()
+                            val aptLabels = aptCodes.map { c ->
+                                apartments[c]?.takeIf { it.isNotBlank() }?.let { "$c — $it" } ?: c
+                            }
+                            val selAptLabel = aptCodes.indexOf(selApt)
+                                .takeIf { it >= 0 }?.let { aptLabels[it] } ?: ""
+                            DropdownField("Apartment", aptLabels, selAptLabel) { i ->
+                                selApt = aptCodes[i]; selUnit = ""
+                            }
+                            Spacer(Modifier.height(6.dp))
+
+                            val units = customers.filter { it.apartment == selApt }
+                                .map { it.unit }.distinct().sorted()
+                            DropdownField("Unit", units, selUnit) { i ->
+                                selUnit = units[i]
+                                customers.firstOrNull { it.unit == selUnit }
+                                    ?.service?.takeIf { it.isNotBlank() }
+                                    ?.let { selService = it }
+                            }
+                            Spacer(Modifier.height(6.dp))
+
+                            val serviceOptions = services.ifEmpty {
+                                listOf("Cleaning", "AirCond Service", "Pest Control", "General")
+                            }
+                            DropdownField("Service", serviceOptions, selService) { i ->
+                                selService = serviceOptions[i]
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = jobDesc, onValueChange = { jobDesc = it },
+                                label = { Text("Notes (optional)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = {
+                                    vm.createJob(selUnit, selService, jobDesc)
+                                    jobDesc = ""
+                                },
+                                enabled = selUnit.isNotBlank() && selService.isNotBlank()
+                            ) { Text("Create job") }
+                        }
+                    }
+                }
+
+                SectionHeader("Or paste the WhatsApp message")
                 Text(
-                    "Paste the WhatsApp group message below. Each line is converted into one Job Register row.",
+                    "Each line is converted into one Job Register row.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp)
@@ -105,6 +185,30 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                 }
             }
             item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DropdownField(
+    label: String,
+    options: List<String>,
+    selected: String,
+    onSelect: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selected, onValueChange = {}, readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEachIndexed { i, opt ->
+                DropdownMenuItem(text = { Text(opt) }, onClick = { onSelect(i); expanded = false })
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ package com.jobregister.app.data
 
 import android.content.Context
 import com.jobregister.app.BuildConfig
+import com.jobregister.app.model.Customer
 import com.jobregister.app.model.Job
 import com.jobregister.app.model.JobCategory
 import com.jobregister.app.model.JobStatus
@@ -24,6 +25,15 @@ class JobRepository(context: Context) {
     private val _jobs = MutableStateFlow<List<Job>>(emptyList())
     val jobs: StateFlow<List<Job>> = _jobs
 
+    private val _customers = MutableStateFlow<List<Customer>>(emptyList())
+    val customers: StateFlow<List<Customer>> = _customers
+
+    private val _apartments = MutableStateFlow<Map<String, String>>(emptyMap())
+    val apartments: StateFlow<Map<String, String>> = _apartments
+
+    private val _services = MutableStateFlow<List<String>>(emptyList())
+    val services: StateFlow<List<String>> = _services
+
     var syncUrl: String
         get() = prefs.getString("sync_url", null)?.takeIf { it.isNotBlank() }
             ?: BuildConfig.DEFAULT_SYNC_URL
@@ -40,6 +50,7 @@ class JobRepository(context: Context) {
 
     init {
         _jobs.value = loadLocal() ?: sampleJobs()
+        loadDirectory()
         persist()
     }
 
@@ -91,10 +102,14 @@ class JobRepository(context: Context) {
         val url = syncUrl
         if (url.isBlank()) return "No sync URL set (Settings)"
         return try {
-            val remote = SheetApi.fetchJobs(url, syncKey)
-            val remoteIds = remote.map { it.id }.toSet()
-            _jobs.value = remote + _jobs.value.filterNot { it.id in remoteIds }
+            val remote = SheetApi.fetchAll(url, syncKey)
+            val remoteIds = remote.jobs.map { it.id }.toSet()
+            _jobs.value = remote.jobs + _jobs.value.filterNot { it.id in remoteIds }
+            if (remote.customers.isNotEmpty()) _customers.value = remote.customers
+            if (remote.apartments.isNotEmpty()) _apartments.value = remote.apartments
+            if (remote.services.isNotEmpty()) _services.value = remote.services
             persist()
+            persistDirectory()
             null
         } catch (e: Exception) {
             e.message ?: "Sync failed"
@@ -118,6 +133,46 @@ class JobRepository(context: Context) {
         val arr = JSONArray()
         _jobs.value.forEach { arr.put(SheetApi.toJson(it)) }
         prefs.edit().putString("jobs", arr.toString()).apply()
+    }
+
+    private fun persistDirectory() {
+        val custArr = JSONArray()
+        _customers.value.forEach { c ->
+            custArr.put(JSONObject().apply {
+                put("apartment", c.apartment); put("unit", c.unit)
+                put("service", c.service); put("customerName", c.customerName)
+            })
+        }
+        val aptObj = JSONObject()
+        _apartments.value.forEach { (k, v) -> aptObj.put(k, v) }
+        prefs.edit()
+            .putString("customers", custArr.toString())
+            .putString("apartments", aptObj.toString())
+            .putString("services", JSONArray(_services.value).toString())
+            .apply()
+    }
+
+    private fun loadDirectory() {
+        try {
+            prefs.getString("customers", null)?.let { raw ->
+                val arr = JSONArray(raw)
+                _customers.value = (0 until arr.length()).map { i ->
+                    val c = arr.getJSONObject(i)
+                    Customer(c.optString("apartment"), c.optString("unit"),
+                        c.optString("service"), c.optString("customerName"))
+                }
+            }
+            prefs.getString("apartments", null)?.let { raw ->
+                val o = JSONObject(raw)
+                val m = mutableMapOf<String, String>()
+                o.keys().forEach { k -> m[k] = o.optString(k) }
+                _apartments.value = m
+            }
+            prefs.getString("services", null)?.let { raw ->
+                val arr = JSONArray(raw)
+                _services.value = (0 until arr.length()).map { arr.getString(it) }
+            }
+        } catch (_: Exception) { }
     }
 
     private fun loadLocal(): List<Job>? {
