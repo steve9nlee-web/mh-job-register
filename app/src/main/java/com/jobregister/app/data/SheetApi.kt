@@ -25,7 +25,8 @@ object SheetApi {
         val jobs: List<Job>,
         val customers: List<Customer>,
         val apartments: Map<String, String>,
-        val services: List<String>
+        val services: List<String>,
+        val serviceDetails: Map<String, String> = emptyMap()
     )
 
     suspend fun fetchAll(baseUrl: String, key: String = ""): RemoteData = withContext(Dispatchers.IO) {
@@ -57,11 +58,23 @@ object SheetApi {
                 if (code.isNotBlank()) apartments[code] = a.optString("name")
             }
 
+            val infoArr = obj.optJSONArray("serviceInfo") ?: JSONArray()
+            val serviceDetails = mutableMapOf<String, String>()
+            val infoNames = mutableListOf<String>()
+            for (i in 0 until infoArr.length()) {
+                val o = infoArr.getJSONObject(i)
+                val n = o.optString("name")
+                if (n.isNotBlank()) {
+                    infoNames.add(n)
+                    serviceDetails[n] = o.optString("details")
+                }
+            }
             val svcArr = obj.optJSONArray("services") ?: JSONArray()
-            val services = (0 until svcArr.length())
+            val services = if (infoNames.isNotEmpty()) infoNames
+            else (0 until svcArr.length())
                 .map { svcArr.getString(it) }.filter { it.isNotBlank() }
 
-            RemoteData(jobs, customers, apartments, services)
+            RemoteData(jobs, customers, apartments, services, serviceDetails)
         } finally {
             conn.disconnect()
         }

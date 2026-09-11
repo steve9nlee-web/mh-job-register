@@ -34,6 +34,9 @@ class JobRepository(context: Context) {
     private val _services = MutableStateFlow<List<String>>(emptyList())
     val services: StateFlow<List<String>> = _services
 
+    private val _serviceDetails = MutableStateFlow<Map<String, String>>(emptyMap())
+    val serviceDetails: StateFlow<Map<String, String>> = _serviceDetails
+
     var syncUrl: String
         get() = prefs.getString("sync_url", null)?.takeIf { it.isNotBlank() }
             ?: BuildConfig.DEFAULT_SYNC_URL
@@ -108,6 +111,7 @@ class JobRepository(context: Context) {
             if (remote.customers.isNotEmpty()) _customers.value = remote.customers
             if (remote.apartments.isNotEmpty()) _apartments.value = remote.apartments
             if (remote.services.isNotEmpty()) _services.value = remote.services
+            if (remote.serviceDetails.isNotEmpty()) _serviceDetails.value = remote.serviceDetails
             persist()
             persistDirectory()
             null
@@ -189,10 +193,13 @@ class JobRepository(context: Context) {
         }
         val aptObj = JSONObject()
         _apartments.value.forEach { (k, v) -> aptObj.put(k, v) }
+        val detObj = JSONObject()
+        _serviceDetails.value.forEach { (k, v) -> detObj.put(k, v) }
         prefs.edit()
             .putString("customers", custArr.toString())
             .putString("apartments", aptObj.toString())
             .putString("services", JSONArray(_services.value).toString())
+            .putString("service_details", detObj.toString())
             .apply()
     }
 
@@ -215,6 +222,12 @@ class JobRepository(context: Context) {
             prefs.getString("services", null)?.let { raw ->
                 val arr = JSONArray(raw)
                 _services.value = (0 until arr.length()).map { arr.getString(it) }
+            }
+            prefs.getString("service_details", null)?.let { raw ->
+                val o = JSONObject(raw)
+                val m = mutableMapOf<String, String>()
+                o.keys().forEach { k -> m[k] = o.optString(k) }
+                _serviceDetails.value = m
             }
         } catch (_: Exception) { }
     }

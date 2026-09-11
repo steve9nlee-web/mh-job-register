@@ -113,11 +113,16 @@ function doGet(e) {
   }
 
   var services = [];
+  var serviceInfo = [];
   var sv = ss.getSheetByName(SERVICE_SHEET);
   if (sv) {
+    if (String(sv.getRange(1, 2).getValue()) !== 'details') upgradeServices_(sv);
     var svv = sv.getDataRange().getValues();
     for (var si = 1; si < svv.length; si++) {
-      if (svv[si][0]) services.push(String(svv[si][0]));
+      if (svv[si][0]) {
+        services.push(String(svv[si][0]));
+        serviceInfo.push({ name: String(svv[si][0]), details: String(svv[si][1] || '') });
+      }
     }
   }
 
@@ -125,7 +130,8 @@ function doGet(e) {
     jobs: jobs,
     customers: customers,
     apartments: apartments,
-    services: services
+    services: services,
+    serviceInfo: serviceInfo
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -179,8 +185,45 @@ function handleService_(d) {
     if (row > 0) sheet.deleteRow(row);
     return ok_();
   }
-  if (row < 0) sheet.appendRow([String(d.name)]);
+  if (row < 0) sheet.appendRow([String(d.name), String(d.details || '')]);
+  else if (d.details) sheet.getRange(row, 2).setValue(String(d.details));
   return ok_();
+}
+
+// One-time upgrade of the Services tab: adds the 'details' column and the
+// three Cleaning Set packages. Runs automatically from doGet when missing.
+// Edit the details text directly in the Services tab — the apps show it in
+// the service info pop-up after their next sync.
+function upgradeServices_(sheet) {
+  sheet.getRange(1, 2).setValue('details');
+  var SET_A =
+    'Set A — Occupied Unit (Routine Housekeeping Service)\n' +
+    '\n' +
+    'Prices:\n' +
+    '1 x Room: RM 35.00\n' +
+    '2 x Room: RM 70.00\n' +
+    '3 x Room: RM 105.00\n' +
+    'Yard Cleaning: RM 35.00\n' +
+    'Whole House incl. common area (Living Hall, Dining Area, Kitchen & Toilet): RM 120.00\n' +
+    '\n' +
+    'Scope of work:\n' +
+    '\u2022 Sweeping and vacuuming of all accessible floor areas\n' +
+    '\u2022 Damp mopping of floor finishes\n' +
+    '\u2022 Wipe down accessible furniture and surfaces\n' +
+    '\u2022 General dusting of fixtures and fittings\n' +
+    '\u2022 Final visual inspection upon completion';
+  var sets = [
+    ['Cleaning Set A', SET_A],
+    ['Cleaning Set B', 'Details to be added \u2014 edit this cell in the Services tab.'],
+    ['Cleaning Set C', 'Details to be added \u2014 edit this cell in the Services tab.']
+  ];
+  var v = sheet.getDataRange().getValues();
+  var have = {};
+  for (var r = 1; r < v.length; r++) have[String(v[r][0])] = r + 1;
+  sets.forEach(function (setRow) {
+    if (have[setRow[0]]) sheet.getRange(have[setRow[0]], 2).setValue(setRow[1]);
+    else sheet.appendRow(setRow);
+  });
 }
 
 /** POST -> job upsert (default) or customer/apartment/service change. */

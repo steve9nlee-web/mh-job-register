@@ -12,9 +12,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -52,6 +57,8 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
     val customers by vm.customers.collectAsState()
     val apartments by vm.apartments.collectAsState()
     val services by vm.services.collectAsState()
+    val serviceDetails by vm.serviceDetails.collectAsState()
+    var showServiceInfo by remember { mutableStateOf(false) }
     var selApt by remember { mutableStateOf("") }
     var selUnit by remember { mutableStateOf("") }
     var manualUnit by remember { mutableStateOf("") }
@@ -118,6 +125,31 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                             }
                             DropdownField("Service", serviceOptions, selService) { i ->
                                 selService = serviceOptions[i]
+                            }
+                            val detail = serviceDetails[selService].orEmpty()
+                            if (detail.isNotBlank()) {
+                                TextButton(onClick = { showServiceInfo = true }) {
+                                    Text("ⓘ  $selService — tap for price & details")
+                                }
+                            }
+                            if (showServiceInfo && detail.isNotBlank()) {
+                                AlertDialog(
+                                    onDismissRequest = { showServiceInfo = false },
+                                    title = { Text(selService) },
+                                    text = {
+                                        Text(
+                                            detail,
+                                            modifier = Modifier
+                                                .heightIn(max = 400.dp)
+                                                .verticalScroll(rememberScrollState())
+                                        )
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = { showServiceInfo = false }) {
+                                            Text("Close")
+                                        }
+                                    }
+                                )
                             }
                             Spacer(Modifier.height(6.dp))
                             OutlinedTextField(

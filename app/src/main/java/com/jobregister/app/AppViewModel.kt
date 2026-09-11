@@ -24,6 +24,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val customers: StateFlow<List<Customer>> = repo.customers
     val apartments: StateFlow<Map<String, String>> = repo.apartments
     val services: StateFlow<List<String>> = repo.services
+    val serviceDetails: StateFlow<Map<String, String>> = repo.serviceDetails
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
