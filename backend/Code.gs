@@ -4,14 +4,25 @@
  * This turns your existing Job Register spreadsheet into the shared database
  * for all four APKs (Admin / Cleaner / Repairer / Initiator).
  *
- * SETUP
+ * FIRST-TIME SETUP (already done for the live spreadsheet)
  * 1. Open your Job Register spreadsheet in Google Sheets.
  * 2. Extensions -> Apps Script, paste this whole file, save.
  * 3. Deploy -> New deployment -> type "Web app".
  *      Execute as: Me
- *      Who has access: Anyone with the link
- * 4. Copy the web app URL and paste it into Settings -> "Job Register sync URL"
- *    in each app.
+ *      Who has access: Anyone       <- NOT "Anyone with Google account",
+ *                                      which makes the apps see a login page
+ * 4. The web app URL is already built into the APKs. It can also be pasted
+ *    into Settings -> "Job Register sync URL" in each app.
+ *
+ * UPDATING THIS SCRIPT LATER — use this, never step 3 again:
+ * 1. Paste the new code over the old, Ctrl+S to save.
+ * 2. Deploy -> Manage deployments -> pencil icon on the Web app
+ *      -> Version: New version -> Deploy.
+ *    "New deployment" would create a DIFFERENT URL and every installed app
+ *    would stop syncing. "New version" keeps the same URL.
+ * 3. If the update adds a new Google permission (photo upload needs Drive),
+ *    pick setupCustomerSheets in the function dropdown, press Run once and
+ *    approve the permission screen.
  *
  * The script creates/uses a sheet tab named "JobRegister" with these columns:
  * id | date | unit | category | description | status | needsReview |
