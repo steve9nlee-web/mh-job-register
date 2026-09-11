@@ -34,13 +34,16 @@ var HEADERS = ['id', 'date', 'unit', 'category', 'description', 'status',
   'needsReview', 'reviewReason', 'remarks', 'customerCharge',
   'contractorPayable', 'invoiced', 'paid', 'createdBy', 'rawMessage'];
 
-function getSheet_() {
-  var ss;
+function openSs_() {
   try {
-    ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    return SpreadsheetApp.openById(SPREADSHEET_ID);
   } catch (e) {
-    ss = SpreadsheetApp.getActiveSpreadsheet();
+    return SpreadsheetApp.getActiveSpreadsheet();
   }
+}
+
+function getSheet_() {
+  var ss = openSs_();
   var sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
@@ -112,4 +115,69 @@ function formatDate_(v) {
     return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   }
   return String(v);
+}
+
+// ---------------------------------------------------------------------------
+// Customer database
+//
+// Run setupCustomerSheets() ONCE from the Apps Script editor (select it in
+// the function dropdown, press Run). It creates three tabs:
+//
+//   Apartments  - the apartment list (code + name). Add or delete rows freely;
+//                 the Customers dropdown follows this list automatically.
+//   Services    - the service type list. Add or delete rows freely too.
+//   Customers   - one row per customer unit: apartment (dropdown), unit,
+//                 service (dropdown), customerName, phone, remarks.
+//                 Add a row: right-click a row number > Insert row, fill it in.
+//                 Delete a row: right-click > Delete row.
+// ---------------------------------------------------------------------------
+
+var CUSTOMER_SHEET = 'Customers';
+var APARTMENT_SHEET = 'Apartments';
+var SERVICE_SHEET = 'Services';
+
+function setupCustomerSheets() {
+  var ss = openSs_();
+
+  var apts = ss.getSheetByName(APARTMENT_SHEET);
+  if (!apts) {
+    apts = ss.insertSheet(APARTMENT_SHEET);
+    apts.appendRow(['code', 'name']);
+    apts.appendRow(['L', 'Luminari']);
+    apts.appendRow(['OV', 'Ocean View']);
+    apts.setFrozenRows(1);
+  }
+
+  var svcs = ss.getSheetByName(SERVICE_SHEET);
+  if (!svcs) {
+    svcs = ss.insertSheet(SERVICE_SHEET);
+    svcs.appendRow(['service']);
+    ['Cleaning', 'AirCond Service', 'Pest Control', 'General'].forEach(function (v) {
+      svcs.appendRow([v]);
+    });
+    svcs.setFrozenRows(1);
+  }
+
+  var cust = ss.getSheetByName(CUSTOMER_SHEET);
+  if (!cust) {
+    cust = ss.insertSheet(CUSTOMER_SHEET);
+    cust.appendRow(['apartment', 'unit', 'service', 'customerName', 'phone', 'remarks']);
+    cust.appendRow(['L', 'L-19-11', 'Cleaning', '', '', '']);
+    cust.appendRow(['OV', 'OV-26-10', 'AirCond Service', '', '', '']);
+    cust.setFrozenRows(1);
+  }
+
+  // Dropdowns applied to whole columns, so newly added rows inherit them and
+  // adding/deleting entries in Apartments/Services updates every dropdown.
+  var aptRule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(apts.getRange('A2:A1000'), true)
+    .setAllowInvalid(false)
+    .build();
+  cust.getRange('A2:A1000').setDataValidation(aptRule);
+
+  var svcRule = SpreadsheetApp.newDataValidation()
+    .requireValueInRange(svcs.getRange('A2:A1000'), true)
+    .setAllowInvalid(false)
+    .build();
+  cust.getRange('C2:C1000').setDataValidation(svcRule);
 }
