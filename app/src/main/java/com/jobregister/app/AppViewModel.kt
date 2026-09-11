@@ -52,6 +52,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             service.contains("clean", ignoreCase = true) -> JobCategory.CLEANING
             service.contains("air", ignoreCase = true) -> JobCategory.AIRCON
             service.contains("pest", ignoreCase = true) -> JobCategory.PEST_CONTROL
+            service.contains("plumb", ignoreCase = true) -> JobCategory.PLUMBING
             else -> JobCategory.GENERAL_REPAIR
         }
         val desc = if (description.isBlank()) service else "$service — $description"
