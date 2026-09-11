@@ -46,6 +46,7 @@ fun categoryColor(c: JobCategory): Color = when (c) {
 
 fun statusColor(s: JobStatus): Color = when (s) {
     JobStatus.COMPLETED -> Color(0xFF2E7D32)
+    JobStatus.IN_PROGRESS -> Color(0xFF6A1B9A)
     JobStatus.PENDING -> Color(0xFFF9A825)
     JobStatus.WAITING -> Color(0xFF0277BD)
     JobStatus.NOT_COMPLETED -> Color(0xFFC62828)

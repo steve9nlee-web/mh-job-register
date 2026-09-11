@@ -12,8 +12,8 @@ android {
         applicationId = "com.jobregister.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "2.3"
+        versionCode = 15
+        versionName = "2.4"
 
         // Built-in sync server: every APK ships pointing at the shared Job
         // Register backend, so phones sync with zero setup. Both values can
@@ -85,4 +85,5 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

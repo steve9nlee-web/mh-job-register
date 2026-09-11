@@ -43,6 +43,12 @@ class JobRepository(context: Context) {
     // Decoded photos already downloaded in this session, keyed by Drive file id.
     private val photoCache = LinkedHashMap<String, ByteArray>()
 
+    /** A job that appeared, or whose status moved, since the previous pull. */
+    data class JobChange(val job: Job, val isNew: Boolean)
+
+    private val _changes = MutableStateFlow<List<JobChange>>(emptyList())
+    val changes: StateFlow<List<JobChange>> = _changes
+
     var syncUrl: String
         get() = prefs.getString("sync_url", null)?.takeIf { it.isNotBlank() }
             ?: BuildConfig.DEFAULT_SYNC_URL
@@ -70,12 +76,22 @@ class JobRepository(context: Context) {
 
     fun get(id: String): Job? = _jobs.value.firstOrNull { it.id == id }
 
-    fun updateStatus(id: String, status: JobStatus, remarks: String, by: String = "") {
+    fun updateStatus(
+        id: String,
+        status: JobStatus,
+        remarks: String,
+        by: String = "",
+        at: String = ""
+    ) {
         get(id)?.let {
             upsert(it.copy(
                 status = status,
                 remarks = remarks,
-                updatedBy = by.ifBlank { it.updatedBy }
+                updatedBy = by.ifBlank { it.updatedBy },
+                startedAt = if (status == JobStatus.IN_PROGRESS && it.startedAt.isBlank()) at
+                    else it.startedAt,
+                completedAt = if (status == JobStatus.COMPLETED) at.ifBlank { it.completedAt }
+                    else it.completedAt
             ))
         }
     }
@@ -118,6 +134,7 @@ class JobRepository(context: Context) {
         if (url.isBlank()) return "No sync URL set (Settings)"
         return try {
             val remote = SheetApi.fetchAll(url, syncKey)
+            _changes.value = detectChanges(remote.jobs)
             val remoteIds = remote.jobs.map { it.id }.toSet()
             _jobs.value = remote.jobs + _jobs.value.filterNot { it.id in remoteIds }
             if (remote.customers.isNotEmpty()) _customers.value = remote.customers
@@ -202,6 +219,36 @@ class JobRepository(context: Context) {
             e.message ?: "Push failed"
         }
     }
+
+    /**
+     * Compare the incoming rows with what this phone saw last time. The very
+     * first sync after an install records the state silently, so a new phone
+     * does not announce every job in the register.
+     */
+    private fun detectChanges(incoming: List<Job>): List<JobChange> {
+        val raw = prefs.getString("seen_status", null)
+        val previous = mutableMapOf<String, String>()
+        if (raw != null) {
+            try {
+                val o = JSONObject(raw)
+                o.keys().forEach { k -> previous[k] = o.optString(k) }
+            } catch (_: Exception) { }
+        }
+        val changes = if (raw == null) emptyList() else incoming.mapNotNull { job ->
+            val was = previous[job.id]
+            when {
+                was == null -> JobChange(job, true)
+                was != job.status.name -> JobChange(job, false)
+                else -> null
+            }
+        }
+        val now = JSONObject()
+        incoming.forEach { now.put(it.id, it.status.name) }
+        prefs.edit().putString("seen_status", now.toString()).apply()
+        return changes
+    }
+
+    fun clearChanges() { _changes.value = emptyList() }
 
     // ---- local persistence ----
 

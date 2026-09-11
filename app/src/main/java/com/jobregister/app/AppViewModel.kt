@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import android.util.Base64
+import com.jobregister.app.util.Notifier
 import com.jobregister.app.util.PhotoUtil
 import org.json.JSONObject
 import java.time.LocalDate
@@ -142,7 +143,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun updateStatus(id: String, status: JobStatus, remarks: String) {
-        repo.updateStatus(id, status, remarks, userName.ifBlank { RoleConfig.role.name })
+        val stamp = LocalDateTime.now()
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        repo.updateStatus(id, status, remarks, userName.ifBlank { RoleConfig.role.name }, stamp)
         repo.get(id)?.let { pushJob(it) }
     }
 
@@ -152,7 +155,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * turns up without anyone pressing sync.
      */
     fun refreshQuietly() {
-        viewModelScope.launch { repo.pull() }
+        viewModelScope.launch {
+            if (repo.pull() == null) announceChanges()
+        }
+    }
+
+    /** Put anything that changed on the phone's notification shade. */
+    private fun announceChanges() {
+        val changes = repo.changes.value
+        if (changes.isNotEmpty()) {
+            Notifier.notifyChanges(getApplication<Application>(), changes)
+            repo.clearChanges()
+        }
     }
 
     fun resolveReview(id: String, unit: String, category: JobCategory, description: String) {
@@ -244,6 +258,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _syncing.value = true
             val err = repo.pull()
             _syncing.value = false
+            if (err == null) announceChanges()
             _message.value = err ?: "Synced with Job Register"
         }
     }

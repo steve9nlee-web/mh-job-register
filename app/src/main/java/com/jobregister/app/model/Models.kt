@@ -5,6 +5,7 @@ enum class Role { ADMIN, CLEANER, REPAIRER, INITIATOR }
 
 enum class JobStatus(val label: String) {
     PENDING("Pending"),
+    IN_PROGRESS("In Progress"),
     WAITING("Waiting / Parts"),
     COMPLETED("Completed"),
     NOT_COMPLETED("Not Completed");
@@ -51,12 +52,15 @@ data class Job(
     val createdBy: String = "",
     val rawMessage: String = "",          // original WhatsApp text
     val rooms: String = "",               // e.g. "Room 2", "Room All"
-    val updatedBy: String = ""            // who last moved the status on
+    val updatedBy: String = "",           // who last moved the status on
+    val startedAt: String = "",           // when the contractor started work
+    val completedAt: String = ""          // when the contractor finished
 ) {
     /** Ready for billing = completed and reviewed. */
     val billable: Boolean get() = status == JobStatus.COMPLETED && !needsReview
     val needsFollowUp: Boolean
-        get() = status == JobStatus.PENDING || status == JobStatus.WAITING || status == JobStatus.NOT_COMPLETED
+        get() = status == JobStatus.PENDING || status == JobStatus.IN_PROGRESS ||
+            status == JobStatus.WAITING || status == JobStatus.NOT_COMPLETED
 }
 
 /** A registered customer unit from the Customers tab of the spreadsheet. */

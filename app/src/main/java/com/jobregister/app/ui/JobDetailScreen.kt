@@ -113,6 +113,9 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
             val photos = allPhotos.filter {
                 it.jobId == job.id && RoleConfig.canSeePhoto(it.kind)
             }
+            val beforeShots = photos.count { it.kind == "before" }
+            val afterShots = photos.count { it.kind == "after" }
+            val readyToFinish = beforeShots > 0 && afterShots > 0
             if (photos.isNotEmpty()) {
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
@@ -127,25 +130,46 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
             if (RoleConfig.canAddWorkPhotos) {
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
-                        SectionHeader("Work photos")
+                        SectionHeader("Work record")
                         Text(
-                            "Take one photo before you start and one when the work " +
-                                "is finished. Each is saved with the job number, date and time.",
+                            "Photograph the unit before you start, and again once the " +
+                                "work is done. Both go to the job with the date and time on them.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(Modifier.height(10.dp))
-                        WorkPhotoRow(
-                            title = "Before work",
-                            saved = photos.count { it.kind == "before" },
-                            takeLabel = "📷 Before photo"
-                        ) { picked -> vm.uploadPhoto(job.id, picked, "before") }
                         Spacer(Modifier.height(12.dp))
-                        WorkPhotoRow(
-                            title = "After work",
-                            saved = photos.count { it.kind == "after" },
-                            takeLabel = "📷 After photo"
-                        ) { picked -> vm.uploadPhoto(job.id, picked, "after") }
+
+                        WorkStep("1. Before you start", beforeShots) {
+                            PhotoPickerButtons(takeLabel = "📷 Before photo") { picked ->
+                                vm.uploadPhoto(job.id, picked, "before")
+                            }
+                        }
+                        if (job.startedAt.isNotBlank()) {
+                            LabelValue("Started", job.startedAt)
+                        } else if (beforeShots > 0 && job.status != JobStatus.COMPLETED) {
+                            Button(
+                                onClick = {
+                                    vm.updateStatus(job.id, JobStatus.IN_PROGRESS, remarks)
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            ) { Text("Start work") }
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+                        WorkStep("2. When the work is done", afterShots) {
+                            if (beforeShots == 0) {
+                                Text(
+                                    "Take the before photo first.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                PhotoPickerButtons(takeLabel = "📷 After photo") { picked ->
+                                    vm.uploadPhoto(job.id, picked, "after")
+                                }
+                            }
+                        }
+                        if (job.completedAt.isNotBlank()) LabelValue("Finished", job.completedAt)
                     }
                 }
             }
@@ -176,11 +200,20 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                                 onClick = {
                                     vm.updateStatus(job.id, JobStatus.COMPLETED, remarks)
                                 },
+                                enabled = readyToFinish || job.status == JobStatus.COMPLETED,
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             ) {
                                 Text(
                                     if (job.status == JobStatus.COMPLETED) "Completed ✓"
-                                    else "Completed"
+                                    else "Mark done"
+                                )
+                            }
+                            if (!readyToFinish && job.status != JobStatus.COMPLETED) {
+                                Text(
+                                    "Add the before and after photos above to finish this job.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 6.dp)
                                 )
                             }
                         } else {
@@ -290,18 +323,14 @@ private fun photoKindLabel(kind: String): String = when (kind) {
     else -> "Job photo"
 }
 
-/** Title, how many are already saved, and the two capture buttons. */
+/** One step of the contractor's photo sequence: heading, tick, and controls. */
 @Composable
-private fun WorkPhotoRow(
-    title: String,
-    saved: Int,
-    takeLabel: String,
-    onPicked: (ByteArray) -> Unit
-) {
+private fun WorkStep(title: String, saved: Int, content: @Composable () -> Unit) {
     Text(
-        if (saved > 0) "$title  ✓ $saved saved" else title,
-        style = MaterialTheme.typography.titleSmall
+        if (saved > 0) "$title   ✓ $saved saved" else title,
+        style = MaterialTheme.typography.titleSmall,
+        color = if (saved > 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurface
     )
     Spacer(Modifier.height(4.dp))
-    PhotoPickerButtons(takeLabel = takeLabel, onPicked = onPicked)
+    content()
 }
