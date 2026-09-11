@@ -191,8 +191,9 @@ function handleService_(d) {
 }
 
 // Keeps the Services tab as the service-package catalogue:
-// - the five packages exist, in presentation order (cleaning sets first,
-//   then the two aircond packages), other services after them
+// - the five packages exist and the whole list is kept in alphabetical
+//   order (AirCond Chemical Overhaul, AirCond Normal Service,
+//   Cleaning Set A/B/C, General, Pest Control, ...)
 // - legacy entries ('Cleaning', 'AirCond Service') are removed and any
 //   customer rows using them are migrated to the matching package
 // - a package's details text is only (re)written while the cell is empty
@@ -234,7 +235,10 @@ function ensureServicePackages_(sheet) {
   var rest = rows.filter(function (x) {
     return !packNames[x[0]] && !LEGACY.hasOwnProperty(x[0]);
   });
-  var desired = packRows.concat(rest);
+  var desired = packRows.concat(rest).sort(function (a, b) {
+    var an = a[0].toLowerCase(), bn = b[0].toLowerCase();
+    return an < bn ? -1 : (an > bn ? 1 : 0);
+  });
 
   var changed = hadLegacy || desired.length !== rows.length;
   if (!changed) {
