@@ -74,19 +74,40 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         val desc = listOf(service, rooms, description)
             .filter { it.isNotBlank() }.joinToString(" — ")
-        saveJob(Job(
+        // A job raised by anyone other than the admin waits for approval
+        // before any contractor can see it. An admin raising it themselves
+        // has already made that decision.
+        val job = Job(
             id = "J-" + UUID.randomUUID().toString().take(8).uppercase(),
             date = LocalDate.now().toString(),
             unit = unit,
             category = category,
             description = desc,
-            status = JobStatus.PENDING,
+            status = if (RoleConfig.canApproveJobs) JobStatus.PENDING
+                else JobStatus.AWAITING_APPROVAL,
             createdBy = userName.ifBlank { RoleConfig.role.name },
-            rooms = rooms
-        ).also { job ->
-            if (photo != null) uploadPhoto(job.id, photo)
-        })
+            rooms = rooms,
+            approvedBy = if (RoleConfig.canApproveJobs) {
+                userName.ifBlank { RoleConfig.role.name }
+            } else "",
+            approvedAt = if (RoleConfig.canApproveJobs) stampNow() else ""
+        )
+        saveJob(job)
+        if (photo != null) uploadPhoto(job.id, photo)
+        if (!job.approved) {
+            _message.value = "Job ${job.id} sent to admin for approval"
+        }
     }
+
+    /** Admin releases the job so the trade it belongs to can pick it up. */
+    fun approveJob(id: String) {
+        repo.approve(id, userName.ifBlank { RoleConfig.role.name }, stampNow())
+        repo.get(id)?.let { pushJob(it) }
+        _message.value = "Job $id approved — sent to the contractor"
+    }
+
+    private fun stampNow(): String =
+        LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
 
     /** Stamp the photo with job no + date/time and upload it to the Drive folder. */
     /**
@@ -133,8 +154,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun photoBytes(fileId: String): ByteArray? = repo.photoBytes(fileId)
 
     /** AI conversion step: raw WhatsApp text -> job row (not yet saved). */
-    fun parseMessage(raw: String): Job =
-        MessageParser.parse(raw, createdBy = userName.ifBlank { RoleConfig.role.name }).job
+    fun parseMessage(raw: String): Job {
+        val job = MessageParser.parse(
+            raw, createdBy = userName.ifBlank { RoleConfig.role.name }
+        ).job
+        // Rows converted from a WhatsApp message go through the same approval
+        // gate as a job raised on the form.
+        return if (RoleConfig.canApproveJobs) job
+        else job.copy(status = JobStatus.AWAITING_APPROVAL)
+    }
 
     fun saveJob(job: Job) {
         repo.upsert(job)
@@ -143,9 +171,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun updateStatus(id: String, status: JobStatus, remarks: String) {
-        val stamp = LocalDateTime.now()
-            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-        repo.updateStatus(id, status, remarks, userName.ifBlank { RoleConfig.role.name }, stamp)
+        repo.updateStatus(
+            id, status, remarks, userName.ifBlank { RoleConfig.role.name }, stampNow()
+        )
         repo.get(id)?.let { pushJob(it) }
     }
 

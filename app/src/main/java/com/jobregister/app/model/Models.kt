@@ -4,6 +4,7 @@ package com.jobregister.app.model
 enum class Role { ADMIN, CLEANER, REPAIRER, INITIATOR }
 
 enum class JobStatus(val label: String) {
+    AWAITING_APPROVAL("Awaiting approval"),
     PENDING("Pending"),
     IN_PROGRESS("In Progress"),
     WAITING("Waiting / Parts"),
@@ -54,8 +55,12 @@ data class Job(
     val rooms: String = "",               // e.g. "Room 2", "Room All"
     val updatedBy: String = "",           // who last moved the status on
     val startedAt: String = "",           // when the contractor started work
-    val completedAt: String = ""          // when the contractor finished
+    val completedAt: String = "",         // when the contractor finished
+    val approvedBy: String = "",          // admin who released it to a contractor
+    val approvedAt: String = ""
 ) {
+    /** Jobs wait for the admin before any contractor can see them. */
+    val approved: Boolean get() = status != JobStatus.AWAITING_APPROVAL
     /** Ready for billing = completed and reviewed. */
     val billable: Boolean get() = status == JobStatus.COMPLETED && !needsReview
     val needsFollowUp: Boolean

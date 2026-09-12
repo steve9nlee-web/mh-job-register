@@ -46,7 +46,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 
 /** Which bottom tabs each APK ships with — the per-role information boundary. */
 val roleTabs: List<Tab> = when (RoleConfig.role) {
-    Role.ADMIN -> listOf(Tab.REGISTER, Tab.REVIEW, Tab.BILLING, Tab.PAYABLE, Tab.FOLLOW_UP)
+    Role.ADMIN -> listOf(Tab.NEW_JOB, Tab.REGISTER, Tab.REVIEW, Tab.BILLING, Tab.PAYABLE)
     Role.CLEANER, Role.REPAIRER -> listOf(Tab.REGISTER, Tab.PAYABLE, Tab.SETTINGS)
     Role.INITIATOR -> listOf(Tab.NEW_JOB, Tab.REGISTER, Tab.SETTINGS)
 }
@@ -104,7 +104,8 @@ fun App(vm: AppViewModel) {
                         onCustomers = if (RoleConfig.role == Role.ADMIN) {
                             { showCustomers = true }
                         } else null,
-                        showFollowUpFilter = RoleConfig.role == Role.INITIATOR)
+                        showFollowUpFilter = RoleConfig.canSeeFollowUp,
+                        showApprovalFilter = RoleConfig.canApproveJobs)
                     Tab.CUSTOMERS -> CustomersScreen(vm, content)
                     Tab.REVIEW -> ReviewScreen(vm, content)
                     Tab.BILLING -> BillingScreen(vm, content, onOpen = { selectedJobId = it })

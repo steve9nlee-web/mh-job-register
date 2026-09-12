@@ -44,7 +44,7 @@ class JobRepository(context: Context) {
     private val photoCache = LinkedHashMap<String, ByteArray>()
 
     /** A job that appeared, or whose status moved, since the previous pull. */
-    data class JobChange(val job: Job, val isNew: Boolean)
+    data class JobChange(val job: Job, val isNew: Boolean, val wasStatus: String? = null)
 
     private val _changes = MutableStateFlow<List<JobChange>>(emptyList())
     val changes: StateFlow<List<JobChange>> = _changes
@@ -93,6 +93,19 @@ class JobRepository(context: Context) {
                 completedAt = if (status == JobStatus.COMPLETED) at.ifBlank { it.completedAt }
                     else it.completedAt
             ))
+        }
+    }
+
+    /** Admin release: the job becomes visible to the trade it belongs to. */
+    fun approve(id: String, by: String, at: String) {
+        get(id)?.let {
+            if (it.status == JobStatus.AWAITING_APPROVAL) {
+                upsert(it.copy(
+                    status = JobStatus.PENDING,
+                    approvedBy = by,
+                    approvedAt = at
+                ))
+            }
         }
     }
 
@@ -238,7 +251,7 @@ class JobRepository(context: Context) {
             val was = previous[job.id]
             when {
                 was == null -> JobChange(job, true)
-                was != job.status.name -> JobChange(job, false)
+                was != job.status.name -> JobChange(job, false, was)
                 else -> null
             }
         }

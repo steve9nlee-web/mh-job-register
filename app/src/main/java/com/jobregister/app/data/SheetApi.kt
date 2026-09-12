@@ -173,6 +173,7 @@ object SheetApi {
         put("createdBy", j.createdBy); put("rawMessage", j.rawMessage)
         put("rooms", j.rooms); put("updatedBy", j.updatedBy)
         put("startedAt", j.startedAt); put("completedAt", j.completedAt)
+        put("approvedBy", j.approvedBy); put("approvedAt", j.approvedAt)
     }
 
     fun fromJson(o: JSONObject): Job = Job(
@@ -194,6 +195,8 @@ object SheetApi {
         rooms = o.optString("rooms"),
         updatedBy = o.optString("updatedBy"),
         startedAt = o.optString("startedAt"),
-        completedAt = o.optString("completedAt")
+        completedAt = o.optString("completedAt"),
+        approvedBy = o.optString("approvedBy"),
+        approvedAt = o.optString("approvedAt")
     )
 }

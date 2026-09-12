@@ -27,7 +27,8 @@
  * The script creates/uses a sheet tab named "JobRegister" with these columns:
  * id | date | unit | category | description | status | needsReview |
  * reviewReason | remarks | customerCharge | contractorPayable | invoiced |
- * paid | createdBy | rawMessage | rooms | updatedBy | startedAt | completedAt
+ * paid | createdBy | rawMessage | rooms | updatedBy | startedAt |
+ * completedAt | approvedBy | approvedAt
  *
  * Job photos are stored in the two Drive folders below and listed on a
  * "Photos" tab; the apps read them back through this same web app, so a
@@ -48,7 +49,7 @@ var SHEET_NAME = 'JobRegister';
 var HEADERS = ['id', 'date', 'unit', 'category', 'description', 'status',
   'needsReview', 'reviewReason', 'remarks', 'customerCharge',
   'contractorPayable', 'invoiced', 'paid', 'createdBy', 'rawMessage',
-  'rooms', 'updatedBy', 'startedAt', 'completedAt'];
+  'rooms', 'updatedBy', 'startedAt', 'completedAt', 'approvedBy', 'approvedAt'];
 
 function openSs_() {
   try {

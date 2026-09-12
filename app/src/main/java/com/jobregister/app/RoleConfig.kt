@@ -38,22 +38,18 @@ object RoleConfig {
     /** Contractors get one "Completed" button instead of the status list. */
     val completionOnly get() = role == Role.CLEANER || role == Role.REPAIRER
 
-    /**
-     * Which photos this APK shows: the person who raised the job sees the
-     * photo that came with it, the contractor sees their own before/after
-     * record, and the admin sees everything.
-     */
-    fun canSeePhoto(kind: String): Boolean = when (role) {
-        Role.ADMIN -> true
-        Role.INITIATOR -> kind != "before" && kind != "after"
-        Role.CLEANER, Role.REPAIRER -> kind == "before" || kind == "after"
-    }
+    /** Only the admin releases a job to the trades. */
+    val canApproveJobs get() = role == Role.ADMIN
 
-    /** Which jobs this APK shows at all. */
+    /**
+     * Which jobs this APK shows at all. A contractor sees nothing until the
+     * admin has approved the job, so work is never started on an unchecked
+     * request.
+     */
     fun visibleJobs(all: List<Job>): List<Job> = when (role) {
         Role.ADMIN -> all
-        Role.CLEANER -> all.filter { it.category.isCleaning }
-        Role.REPAIRER -> all.filter { it.category.isRepair }
+        Role.CLEANER -> all.filter { it.category.isCleaning && it.approved }
+        Role.REPAIRER -> all.filter { it.category.isRepair && it.approved }
         Role.INITIATOR -> all
     }.reversed().sortedByDescending { it.date }   // newest job at the top
 

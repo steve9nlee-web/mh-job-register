@@ -159,12 +159,12 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(Modifier.height(8.dp))
-                            SectionHeader("Photo (optional)")
+                            SectionHeader("Photo")
                             PhotoPickerButtons { picked -> photoBytes = picked }
                             photoBytes?.let { bytes ->
                                 Row {
                                     Text(
-                                        "✓ Photo attached (${bytes.size / 1024} KB) — saved to Drive with job no & time stamp on create",
+                                        "✓ Photo taken (${bytes.size / 1024} KB) — goes to Drive with the job number and time stamp when you create the job",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.weight(1f)

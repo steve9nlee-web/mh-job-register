@@ -21,14 +21,17 @@ import com.jobregister.app.util.PhotoUtil
 import java.io.File
 
 /**
- * Take-a-photo / pick-from-gallery pair of buttons. The image is downscaled
- * and compressed before it reaches [onPicked], so callers only ever handle
- * a JPEG small enough to upload over a phone connection.
+ * Camera button for job photos, with an optional gallery button behind
+ * [showUpload]. Job and work photos are taken on the spot — an old picture
+ * from the gallery is not evidence — so the gallery stays off by default.
+ * The image is downscaled and compressed before it reaches [onPicked], so
+ * callers only ever handle a JPEG small enough for a phone connection.
  */
 @Composable
 fun PhotoPickerButtons(
     takeLabel: String = "📷 Take photo",
     uploadLabel: String = "🖼 Upload",
+    showUpload: Boolean = false,
     onPicked: (ByteArray) -> Unit
 ) {
     val context = LocalContext.current
@@ -54,7 +57,9 @@ fun PhotoPickerButtons(
             cameraUri = uri
             takePicture.launch(uri)
         }) { Text(takeLabel) }
-        Spacer(Modifier.width(8.dp))
-        OutlinedButton(onClick = { pickImage.launch("image/*") }) { Text(uploadLabel) }
+        if (showUpload) {
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = { pickImage.launch("image/*") }) { Text(uploadLabel) }
+        }
     }
 }

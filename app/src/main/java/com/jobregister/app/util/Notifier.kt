@@ -12,6 +12,7 @@ import com.jobregister.app.MainActivity
 import com.jobregister.app.R
 import com.jobregister.app.RoleConfig
 import com.jobregister.app.data.JobRepository
+import com.jobregister.app.model.JobStatus
 import com.jobregister.app.model.Role
 
 /**
@@ -44,17 +45,30 @@ object Notifier {
             val where = listOf(job.unit.ifBlank { "Unit ?" }, job.category.label)
                 .joinToString("  ·  ")
             val who = job.updatedBy.takeIf { it.isNotBlank() }?.let { " by $it" } ?: ""
+            // A job moving out of "awaiting approval" is the admin releasing
+            // it, which reads better than the status name it lands on.
+            val justApproved = change.wasStatus == JobStatus.AWAITING_APPROVAL.name &&
+                job.status == JobStatus.PENDING
             val text: Pair<String, String>? = when (RoleConfig.role) {
-                Role.ADMIN ->
-                    if (change.isNew) "New job ${job.id}" to "$where\n${job.description}"
-                    else "${job.status.label} — ${job.unit}" to "$where$who"
-                Role.INITIATOR ->
+                Role.ADMIN -> when {
+                    change.isNew && !job.approved ->
+                        "New job needs approval" to "$where\n${job.description}"
+                    change.isNew -> "New job ${job.id}" to "$where\n${job.description}"
+                    else -> "${job.status.label} — ${job.unit}" to "$where$who"
+                }
+                Role.INITIATOR -> when {
                     // The initiator raised the job, so only progress matters.
-                    if (change.isNew) null
-                    else "${job.status.label} — ${job.unit}" to "$where$who"
+                    change.isNew -> null
+                    justApproved -> "Approved — ${job.unit}" to
+                        "$where\nSent to the ${job.category.label.lowercase()} team"
+                    else -> "${job.status.label} — ${job.unit}" to "$where$who"
+                }
                 Role.CLEANER, Role.REPAIRER ->
-                    if (change.isNew && RoleConfig.visibleJobs(listOf(job)).isNotEmpty())
-                        "New job for you" to "$where\n${job.description}"
+                    // Contractors only ever see approved work, so tell them
+                    // when it lands — whether it arrived new or was released.
+                    if (RoleConfig.visibleJobs(listOf(job)).isNotEmpty() &&
+                        (change.isNew || justApproved)
+                    ) "New job for you" to "$where\n${job.description}"
                     else null
             }
             text?.let { Message(job.id, it.first, it.second) }

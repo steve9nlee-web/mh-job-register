@@ -96,6 +96,13 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                     if (job.updatedBy.isNotBlank()) {
                         LabelValue("Status updated by", job.updatedBy)
                     }
+                    if (job.approvedBy.isNotBlank()) {
+                        LabelValue(
+                            "Approved by",
+                            listOf(job.approvedBy, job.approvedAt)
+                                .filter { it.isNotBlank() }.joinToString("  ·  ")
+                        )
+                    }
                     LabelValue("Description", job.description)
                     if (job.remarks.isNotBlank()) LabelValue("Remarks", job.remarks)
                     if (RoleConfig.canReviewFlags && job.rawMessage.isNotBlank()) {
@@ -110,9 +117,35 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                 }
             }
 
-            val photos = allPhotos.filter {
-                it.jobId == job.id && RoleConfig.canSeePhoto(it.kind)
+            if (!job.approved) {
+                Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        SectionHeader("Approval")
+                        if (RoleConfig.canApproveJobs) {
+                            Text(
+                                "No contractor can see this job yet. Approving it " +
+                                    "releases it to the trade it belongs to.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Button(
+                                onClick = { vm.approveJob(job.id) },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            ) { Text("Approve — send to ${job.category.label}") }
+                        } else {
+                            Text(
+                                "Waiting for the admin to approve this job.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
+
+            // Everyone who can open the job sees its whole photo record:
+            // the picture it was raised with and the before/after pair.
+            val photos = allPhotos.filter { it.jobId == job.id }
             val beforeShots = photos.count { it.kind == "before" }
             val afterShots = photos.count { it.kind == "after" }
             val readyToFinish = beforeShots > 0 && afterShots > 0

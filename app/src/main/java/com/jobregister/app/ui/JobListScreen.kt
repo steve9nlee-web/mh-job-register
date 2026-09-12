@@ -1,5 +1,7 @@
 package com.jobregister.app.ui
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,16 +41,22 @@ fun JobListScreen(
     onOpen: (String) -> Unit,
     onSettings: () -> Unit,
     onCustomers: (() -> Unit)? = null,
-    showFollowUpFilter: Boolean = false
+    showFollowUpFilter: Boolean = false,
+    showApprovalFilter: Boolean = false
 ) {
     val jobs by vm.jobs.collectAsState()
     val photos by vm.photos.collectAsState()
     val syncing by vm.syncing.collectAsState()
-    var followUpOnly by remember { mutableStateOf(false) }
+    var filter by remember { mutableStateOf(JobFilter.ALL) }
     val all = RoleConfig.visibleJobs(jobs)
-    val visible = if (showFollowUpFilter && followUpOnly) {
-        all.filter { it.needsFollowUp }.sortedBy { it.date }
-    } else all
+    val waiting = all.filter { !it.approved }
+    val followUps = all.filter { it.needsFollowUp }
+    val visible = when (filter) {
+        JobFilter.TO_APPROVE -> waiting
+        // Oldest first when chasing: the longest wait needs attention first.
+        JobFilter.FOLLOW_UP -> followUps.sortedBy { it.date }
+        JobFilter.ALL -> all
+    }
 
     Column(modifier.fillMaxSize()) {
         TopAppBar(
@@ -68,33 +76,48 @@ fun JobListScreen(
                 }
             }
         )
-        if (showFollowUpFilter) {
-            val followUpCount = all.count { it.needsFollowUp }
-            Row(Modifier.padding(horizontal = 12.dp)) {
+        if (showFollowUpFilter || showApprovalFilter) {
+            Row(
+                Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp)
+            ) {
                 FilterChip(
-                    selected = !followUpOnly,
-                    onClick = { followUpOnly = false },
+                    selected = filter == JobFilter.ALL,
+                    onClick = { filter = JobFilter.ALL },
                     label = { Text("All jobs (${all.size})") }
                 )
-                Spacer(Modifier.width(8.dp))
-                FilterChip(
-                    selected = followUpOnly,
-                    onClick = { followUpOnly = true },
-                    label = { Text("Follow-up ($followUpCount)") }
-                )
+                if (showApprovalFilter) {
+                    Spacer(Modifier.width(8.dp))
+                    FilterChip(
+                        selected = filter == JobFilter.TO_APPROVE,
+                        onClick = { filter = JobFilter.TO_APPROVE },
+                        label = { Text("To approve (${waiting.size})") }
+                    )
+                }
+                if (showFollowUpFilter) {
+                    Spacer(Modifier.width(8.dp))
+                    FilterChip(
+                        selected = filter == JobFilter.FOLLOW_UP,
+                        onClick = { filter = JobFilter.FOLLOW_UP },
+                        label = { Text("Follow-up (${followUps.size})") }
+                    )
+                }
             }
         }
         if (visible.isEmpty()) {
             Text(
-                if (showFollowUpFilter && followUpOnly) "Nothing to follow up — all jobs completed." else "No jobs yet.",
+                when (filter) {
+                    JobFilter.TO_APPROVE -> "Nothing waiting for approval."
+                    JobFilter.FOLLOW_UP -> "Nothing to follow up — all jobs completed."
+                    JobFilter.ALL -> "No jobs yet."
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(24.dp)
             )
         } else {
             LazyColumn(Modifier.padding(horizontal = 12.dp)) {
-                val withPhotos = photos
-                    .filter { RoleConfig.canSeePhoto(it.kind) }
-                    .map { it.jobId }.toSet()
+                val withPhotos = photos.map { it.jobId }.toSet()
                 items(visible, key = { it.id }) { job ->
                     JobCard(job, hasPhoto = job.id in withPhotos) { onOpen(job.id) }
                 }
@@ -102,3 +125,6 @@ fun JobListScreen(
         }
     }
 }
+
+/** Which slice of the register the list is showing. */
+enum class JobFilter { ALL, TO_APPROVE, FOLLOW_UP }
