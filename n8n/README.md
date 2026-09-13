@@ -1,4 +1,11 @@
-# Running the Job Register backend under n8n
+# Track B — the Job Register under n8n
+
+> **Status: early, and behind the spec.** These three workflows were written
+> against the original 15-column sheet, before approval, rooms, work photos,
+> timestamps and notifications existed. Read `../SPEC.md` for what the workflow
+> actually has to do now, and `../CLAUDE.md` for how this track is meant to
+> stay separate from the Android apps — including using its **own copy** of the
+> spreadsheet and Drive folders so the trial data never mixes.
 
 Three importable workflows replace / upgrade the Apps Script backend. The four
 APKs keep working unchanged — they just point at an n8n URL instead.
