@@ -62,7 +62,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         unit: String,
         service: String,
         description: String,
-        photo: ByteArray? = null,
+        photos: List<ByteArray> = emptyList(),
         rooms: String = ""
     ) {
         val category = when {
@@ -93,7 +93,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             approvedAt = if (RoleConfig.canApproveJobs) stampNow() else ""
         )
         saveJob(job)
-        if (photo != null) uploadPhoto(job.id, photo)
+        uploadPhotos(job.id, photos)
         if (!job.approved) {
             _message.value = "Job ${job.id} sent to admin for approval"
         }
@@ -116,38 +116,59 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * job is raised, or "before"/"after" for the contractor's work record —
      * each kind lands in its own Drive folder.
      */
-    fun uploadPhoto(jobId: String, bytes: ByteArray, kind: String = "job") {
+    fun uploadPhoto(jobId: String, bytes: ByteArray, kind: String = "job") =
+        uploadPhotos(jobId, listOf(bytes), kind)
+
+    /**
+     * Stamp each photo with the job number and the time it was taken, then
+     * send them one after another. [kind] is "job" for pictures attached when
+     * the job is raised, or "before"/"after" for the contractor's work
+     * record — each kind lands in its own Drive folder.
+     */
+    fun uploadPhotos(jobId: String, images: List<ByteArray>, kind: String = "job") {
+        if (images.isEmpty()) return
         viewModelScope.launch {
-            val now = LocalDateTime.now()
-            val tag = when (kind) {
-                "before" -> "BEFORE"
-                "after" -> "AFTER"
-                else -> ""
+            var failure: String? = null
+            images.forEachIndexed { index, bytes ->
+                _message.value = if (images.size == 1) "Uploading photo…"
+                    else "Uploading photo ${index + 1} of ${images.size}…"
+                failure = pushPhoto(jobId, bytes, kind) ?: failure
             }
-            val stampedAt = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-            val label = listOf(jobId, tag, stampedAt).filter { it.isNotBlank() }.joinToString("  ")
-            val stamped = PhotoUtil.stamp(bytes, label)
-            val filename = listOf(jobId, tag, now.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")))
-                .filter { it.isNotBlank() }.joinToString("_") + ".jpg"
-            _message.value = "Uploading photo…"
-            val err = repo.pushAction(JSONObject().apply {
-                put("type", "photo"); put("jobId", jobId)
-                put("kind", kind)
-                put("filename", filename)
-                put("data", Base64.encodeToString(stamped, Base64.NO_WRAP))
-            })
-            if (err == null) {
-                // Pull the Photos tab back so the picture shows on the job.
+            val error = failure
+            if (error == null) {
+                // Pull the Photos tab back so the pictures show on the job.
                 repo.pull()
-                _message.value = when (kind) {
-                    "before" -> "Before photo saved"
-                    "after" -> "After photo saved"
+                _message.value = when {
+                    images.size > 1 -> "${images.size} photos uploaded to Drive"
+                    kind == "before" -> "Before photo saved"
+                    kind == "after" -> "After photo saved"
                     else -> "Photo uploaded to Drive"
                 }
             } else {
-                _message.value = "Photo upload failed: $err"
+                _message.value = "Photo upload failed: $error"
             }
         }
+    }
+
+    private suspend fun pushPhoto(jobId: String, bytes: ByteArray, kind: String): String? {
+        val now = LocalDateTime.now()
+        val tag = when (kind) {
+            "before" -> "BEFORE"
+            "after" -> "AFTER"
+            else -> ""
+        }
+        val stampedAt = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        val label = listOf(jobId, tag, stampedAt).filter { it.isNotBlank() }.joinToString("  ")
+        val stamped = PhotoUtil.stamp(bytes, label)
+        val filename = listOf(
+            jobId, tag, now.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS"))
+        ).filter { it.isNotBlank() }.joinToString("_") + ".jpg"
+        return repo.pushAction(JSONObject().apply {
+            put("type", "photo"); put("jobId", jobId)
+            put("kind", kind)
+            put("filename", filename)
+            put("data", Base64.encodeToString(stamped, Base64.NO_WRAP))
+        })
     }
 
     /** JPEG bytes of a job photo, fetched through the backend and cached. */

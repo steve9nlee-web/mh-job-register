@@ -43,17 +43,27 @@ Initiator raises job ──► Awaiting approval ──► Admin approves ──
 ```
 
 1. **Raise.** Initiator picks Apartment → Unit → Service → Room → notes, and
-   takes a photo. The job is created as `AWAITING_APPROVAL`. The photo uploads
-   with the job; there is no separate upload step and no gallery picker.
+   takes **as many photos as the job needs**. They upload with the job; there
+   is no separate upload step and no gallery picker. A "Job description &
+   pricing" button sits directly under Create job and shows the unit, room,
+   notes and the full price and scope of the chosen service.
 2. **Approve.** Only the admin. On approval the job becomes `PENDING`,
    `approvedBy` and `approvedAt` are stamped, and it becomes visible to the
    trade that matches its category. An admin raising a job approves it in the
    same act.
-3. **Start.** The contractor must take a *before* photo. Only then can they
-   press Start work, which sets `IN_PROGRESS` and stamps `startedAt`.
+3. **Start.** The contractor must take a *before* photo. Only then do the
+   status buttons unlock: **Start** sets `IN_PROGRESS` and stamps `startedAt`;
+   **Held up** and **Not done** each demand a typed reason before they save,
+   and that reason becomes the job's remarks.
 4. **Finish.** The contractor must take an *after* photo. Only then does
-   "Mark done" enable, setting `COMPLETED`, `completedAt` and `updatedBy`.
-   A job cannot be closed without both photos.
+   **Complete job** enable — and it turns green the moment the after photo
+   lands, so a full-colour button means "ready to close". Completing sets
+   `COMPLETED`, `completedAt` and `updatedBy`. A job cannot be closed without
+   both photos.
+
+   The contractor's screen is laid out in that order, top to bottom: before
+   photo, then the three status buttons, then the after photo and the green
+   Complete button at the bottom.
 5. **Bill.** Admin sets customer charge and contractor payable (rate card or
    by hand), then marks invoiced and paid.
 6. **Chase.** Anything not completed appears in the Follow-up view, oldest
@@ -157,7 +167,11 @@ columns at the end and tolerate rows written before a column existed.
 - Two Drive folders, deliberately separate:
   - Job intake photos → `1TZZteVqmOYNGy1LtaNSN_HmMmipqAvoa`
   - Before/after work photos → `1N-wODATUjCGzemtrEFLXErI-gAltRPXu`
-- Everyone who can open a job sees all of its photos, each labelled.
+- A job may carry several photos of each kind.
+- Everyone who can open a job sees all of its photos, in three named groups:
+  **Photo from Initiator**, **Photo before work**, **Photo after work**. Empty
+  groups still show their heading, so a missing after photo is as visible as a
+  present one.
 - Photos are served back through the backend, so a phone never needs its own
   Drive access, and only files inside those two folders may be served.
 

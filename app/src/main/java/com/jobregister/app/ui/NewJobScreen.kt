@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -65,7 +66,7 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
     var selRoom by remember { mutableStateOf("") }
     var jobDesc by remember { mutableStateOf("") }
 
-    var photoBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var photos by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
 
     Column(modifier.fillMaxSize()) {
         TopAppBar(
@@ -119,30 +120,6 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                                 selService = serviceOptions[i]
                             }
                             val detail = serviceDetails[selService].orEmpty()
-                            if (detail.isNotBlank()) {
-                                TextButton(onClick = { showServiceInfo = true }) {
-                                    Text("ⓘ  $selService — tap for price & details")
-                                }
-                            }
-                            if (showServiceInfo && detail.isNotBlank()) {
-                                AlertDialog(
-                                    onDismissRequest = { showServiceInfo = false },
-                                    title = { Text(selService) },
-                                    text = {
-                                        Text(
-                                            detail,
-                                            modifier = Modifier
-                                                .heightIn(max = 400.dp)
-                                                .verticalScroll(rememberScrollState())
-                                        )
-                                    },
-                                    confirmButton = {
-                                        TextButton(onClick = { showServiceInfo = false }) {
-                                            Text("Close")
-                                        }
-                                    }
-                                )
-                            }
                             Spacer(Modifier.height(6.dp))
                             // How much of the unit the job covers — this is what
                             // the cleaning sets are priced by.
@@ -159,27 +136,81 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Spacer(Modifier.height(8.dp))
-                            SectionHeader("Photo")
-                            PhotoPickerButtons { picked -> photoBytes = picked }
-                            photoBytes?.let { bytes ->
-                                Row {
+                            SectionHeader("Photos")
+                            Text(
+                                "Take as many as you need — every one is stamped with the " +
+                                    "job number and time when the job is created.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            PhotoPickerButtons(
+                                takeLabel = if (photos.isEmpty()) "📷 Take photo"
+                                    else "📷 Take another"
+                            ) { picked -> photos = photos + picked }
+                            photos.forEachIndexed { index, bytes ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        "✓ Photo taken (${bytes.size / 1024} KB) — goes to Drive with the job number and time stamp when you create the job",
+                                        "✓ Photo ${index + 1}  (${bytes.size / 1024} KB)",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.weight(1f)
                                     )
-                                    OutlinedButton(onClick = { photoBytes = null }) { Text("Remove") }
+                                    TextButton(onClick = {
+                                        photos = photos.filterIndexed { i, _ -> i != index }
+                                    }) { Text("Remove") }
                                 }
                             }
                             Spacer(Modifier.height(8.dp))
                             Button(
                                 onClick = {
-                                    vm.createJob(selUnit, selService, jobDesc, photoBytes, selRoom)
-                                    jobDesc = ""; photoBytes = null; selRoom = ""
+                                    vm.createJob(selUnit, selService, jobDesc, photos, selRoom)
+                                    jobDesc = ""; photos = emptyList(); selRoom = ""
                                 },
-                                enabled = selUnit.isNotBlank() && selService.isNotBlank()
+                                enabled = selUnit.isNotBlank() && selService.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth()
                             ) { Text("Create job${if (selUnit.isNotBlank()) " for $selUnit" else ""}") }
+
+                            // What this job is and what it costs, kept behind
+                            // the Create button so the form stays short.
+                            OutlinedButton(
+                                onClick = { showServiceInfo = true },
+                                enabled = selService.isNotBlank(),
+                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                            ) { Text("ⓘ  Job description & pricing") }
+
+                            if (showServiceInfo) {
+                                val summary = buildString {
+                                    if (selUnit.isNotBlank()) appendLine("Unit: $selUnit")
+                                    if (selRoom.isNotBlank()) appendLine("Room: $selRoom")
+                                    if (jobDesc.isNotBlank()) appendLine("Notes: $jobDesc")
+                                    if (isNotEmpty()) appendLine()
+                                    append(
+                                        detail.ifBlank {
+                                            "No price or scope has been entered for this " +
+                                                "service yet. The admin can add it in the " +
+                                                "Services tab of the database."
+                                        }
+                                    )
+                                }
+                                AlertDialog(
+                                    onDismissRequest = { showServiceInfo = false },
+                                    title = { Text(selService.ifBlank { "Job description & pricing" }) },
+                                    text = {
+                                        Text(
+                                            summary,
+                                            modifier = Modifier
+                                                .heightIn(max = 400.dp)
+                                                .verticalScroll(rememberScrollState())
+                                        )
+                                    },
+                                    confirmButton = {
+                                        TextButton(onClick = { showServiceInfo = false }) {
+                                            Text("Close")
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }

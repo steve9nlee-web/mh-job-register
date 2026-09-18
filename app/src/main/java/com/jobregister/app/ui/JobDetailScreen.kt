@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,8 +27,10 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,6 +68,8 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
     var contractor by remember(job.id, job.contractorPayable) {
         mutableStateOf(job.contractorPayable?.toString() ?: "")
     }
+    // Which status is waiting on a reason being typed, if any.
+    var holdReason by remember(job.id) { mutableStateOf<JobStatus?>(null) }
 
     Column(modifier.fillMaxSize()) {
         TopAppBar(
@@ -149,18 +154,21 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
             val beforeShots = photos.count { it.kind == "before" }
             val afterShots = photos.count { it.kind == "after" }
             val readyToFinish = beforeShots > 0 && afterShots > 0
-            if (photos.isNotEmpty()) {
-                Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    Column(Modifier.padding(12.dp)) {
-                        SectionHeader(
-                            if (photos.size == 1) "Photo" else "Photos (${photos.size})"
-                        )
-                        photos.forEach { photo -> JobPhoto(vm, photo) }
-                    }
+            Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                Column(Modifier.padding(12.dp)) {
+                    SectionHeader("Photos (${photos.size})")
+                    PhotoGroup(
+                        "Photo from Initiator",
+                        photos.filter { it.kind != "before" && it.kind != "after" },
+                        vm
+                    )
+                    PhotoGroup("Photo before work", photos.filter { it.kind == "before" }, vm)
+                    PhotoGroup("Photo after work", photos.filter { it.kind == "after" }, vm)
                 }
             }
 
             if (RoleConfig.canAddWorkPhotos) {
+                val done = job.status == JobStatus.COMPLETED
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         SectionHeader("Work record")
@@ -172,24 +180,77 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                         )
                         Spacer(Modifier.height(12.dp))
 
+                        // Top — the before photo, which unlocks everything else.
                         WorkStep("1. Before you start", beforeShots) {
-                            PhotoPickerButtons(takeLabel = "📷 Before photo") { picked ->
-                                vm.uploadPhoto(job.id, picked, "before")
+                            PhotoPickerButtons(
+                                takeLabel = if (beforeShots == 0) "📷 Before photo"
+                                    else "📷 Another before photo"
+                            ) { picked -> vm.uploadPhoto(job.id, picked, "before") }
+                        }
+                        if (job.startedAt.isNotBlank()) LabelValue("Started", job.startedAt)
+
+                        // Middle — how the job is going.
+                        Spacer(Modifier.height(16.dp))
+                        Text("2. Work status", style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(6.dp))
+                        if (beforeShots == 0) {
+                            Text(
+                                "Take the before photo first.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Row(Modifier.fillMaxWidth()) {
+                                Button(
+                                    onClick = {
+                                        holdReason = null
+                                        vm.updateStatus(job.id, JobStatus.IN_PROGRESS, remarks)
+                                    },
+                                    enabled = !done && job.status != JobStatus.IN_PROGRESS,
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("▶ Start") }
+                                Spacer(Modifier.width(6.dp))
+                                OutlinedButton(
+                                    onClick = { holdReason = JobStatus.WAITING },
+                                    enabled = !done,
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("⏸ Held up") }
+                                Spacer(Modifier.width(6.dp))
+                                OutlinedButton(
+                                    onClick = { holdReason = JobStatus.NOT_COMPLETED },
+                                    enabled = !done,
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("✖ Not done") }
                             }
                         }
-                        if (job.startedAt.isNotBlank()) {
-                            LabelValue("Started", job.startedAt)
-                        } else if (beforeShots > 0 && job.status != JobStatus.COMPLETED) {
-                            Button(
-                                onClick = {
-                                    vm.updateStatus(job.id, JobStatus.IN_PROGRESS, remarks)
+                        holdReason?.let { pending ->
+                            OutlinedTextField(
+                                value = remarks, onValueChange = { remarks = it },
+                                label = {
+                                    Text(
+                                        if (pending == JobStatus.WAITING)
+                                            "Why is it held up?"
+                                        else "Why could it not be completed?"
+                                    )
                                 },
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                            ) { Text("Start work") }
+                            )
+                            Row(Modifier.padding(top = 6.dp)) {
+                                Button(
+                                    onClick = {
+                                        vm.updateStatus(job.id, pending, remarks)
+                                        holdReason = null
+                                    },
+                                    enabled = remarks.isNotBlank()
+                                ) { Text("Save reason") }
+                                Spacer(Modifier.width(8.dp))
+                                TextButton(onClick = { holdReason = null }) { Text("Cancel") }
+                            }
                         }
 
-                        Spacer(Modifier.height(14.dp))
-                        WorkStep("2. When the work is done", afterShots) {
+                        // Bottom — the after photo, then finishing the job.
+                        Spacer(Modifier.height(16.dp))
+                        WorkStep("3. When the work is done", afterShots) {
                             if (beforeShots == 0) {
                                 Text(
                                     "Take the before photo first.",
@@ -197,30 +258,56 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             } else {
-                                PhotoPickerButtons(takeLabel = "📷 After photo") { picked ->
-                                    vm.uploadPhoto(job.id, picked, "after")
-                                }
+                                PhotoPickerButtons(
+                                    takeLabel = if (afterShots == 0) "📷 After photo"
+                                        else "📷 Another after photo"
+                                ) { picked -> vm.uploadPhoto(job.id, picked, "after") }
                             }
+                        }
+                        if (holdReason == null) {
+                            OutlinedTextField(
+                                value = remarks, onValueChange = { remarks = it },
+                                label = { Text("Remarks (optional)") },
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            )
+                        }
+                        // Green the moment the after photo is in, so a cleaner
+                        // can see at a glance that the job is ready to close.
+                        Button(
+                            onClick = { vm.updateStatus(job.id, JobStatus.COMPLETED, remarks) },
+                            enabled = readyToFinish || done,
+                            colors = if (afterShots > 0 || done) {
+                                ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                            } else ButtonDefaults.buttonColors(),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        ) { Text(if (done) "Completed ✓" else "✓ Complete job") }
+                        if (!readyToFinish && !done) {
+                            Text(
+                                "Add the before and after photos to finish this job.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
                         }
                         if (job.completedAt.isNotBlank()) LabelValue("Finished", job.completedAt)
                     }
                 }
             }
 
-            if (RoleConfig.canUpdateStatus) {
+            // Contractors drive the job from the work record above; this is
+            // the admin's free-hand override.
+            if (RoleConfig.canUpdateStatus && !RoleConfig.completionOnly) {
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         SectionHeader("Update Status")
-                        if (!RoleConfig.completionOnly) {
-                            Row(Modifier.horizontalScroll(rememberScrollState())) {
-                                JobStatus.entries.forEach { s ->
-                                    FilterChip(
-                                        selected = status == s,
-                                        onClick = { status = s },
-                                        label = { Text(s.label) },
-                                        modifier = Modifier.padding(end = 6.dp)
-                                    )
-                                }
+                        Row(Modifier.horizontalScroll(rememberScrollState())) {
+                            JobStatus.entries.forEach { s ->
+                                FilterChip(
+                                    selected = status == s,
+                                    onClick = { status = s },
+                                    label = { Text(s.label) },
+                                    modifier = Modifier.padding(end = 6.dp)
+                                )
                             }
                         }
                         OutlinedTextField(
@@ -228,33 +315,10 @@ fun JobDetailScreen(vm: AppViewModel, jobId: String, modifier: Modifier, onBack:
                             label = { Text("Remarks") },
                             modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
                         )
-                        if (RoleConfig.completionOnly) {
-                            Button(
-                                onClick = {
-                                    vm.updateStatus(job.id, JobStatus.COMPLETED, remarks)
-                                },
-                                enabled = readyToFinish || job.status == JobStatus.COMPLETED,
-                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                            ) {
-                                Text(
-                                    if (job.status == JobStatus.COMPLETED) "Completed ✓"
-                                    else "Mark done"
-                                )
-                            }
-                            if (!readyToFinish && job.status != JobStatus.COMPLETED) {
-                                Text(
-                                    "Add the before and after photos above to finish this job.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(top = 6.dp)
-                                )
-                            }
-                        } else {
-                            Button(
-                                onClick = { vm.updateStatus(job.id, status, remarks) },
-                                modifier = Modifier.padding(top = 8.dp)
-                            ) { Text("Save status") }
-                        }
+                        Button(
+                            onClick = { vm.updateStatus(job.id, status, remarks) },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) { Text("Save status") }
                     }
                 }
             }
@@ -354,6 +418,28 @@ private fun photoKindLabel(kind: String): String = when (kind) {
     "before" -> "Before work"
     "after" -> "After work"
     else -> "Job photo"
+}
+
+/**
+ * One of the three photo groups. Empty groups still show their heading, so a
+ * missing after photo is as visible as a present one.
+ */
+@Composable
+private fun PhotoGroup(title: String, photos: List<SheetApi.JobPhoto>, vm: AppViewModel) {
+    Text(
+        if (photos.isEmpty()) title else "$title  (${photos.size})",
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(top = 10.dp)
+    )
+    if (photos.isEmpty()) {
+        Text(
+            "None yet",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    } else {
+        photos.forEach { photo -> JobPhoto(vm, photo) }
+    }
 }
 
 /** One step of the contractor's photo sequence: heading, tick, and controls. */
