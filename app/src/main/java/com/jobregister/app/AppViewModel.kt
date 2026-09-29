@@ -63,7 +63,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         service: String,
         description: String,
         photos: List<ByteArray> = emptyList(),
-        rooms: String = ""
+        rooms: String = "",
+        rawMessage: String = ""
     ) {
         val category = when {
             service.contains("clean", ignoreCase = true) -> JobCategory.CLEANING
@@ -86,6 +87,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             status = if (RoleConfig.canApproveJobs) JobStatus.PENDING
                 else JobStatus.AWAITING_APPROVAL,
             createdBy = userName.ifBlank { RoleConfig.role.name },
+            rawMessage = rawMessage,
             rooms = rooms,
             approvedBy = if (RoleConfig.canApproveJobs) {
                 userName.ifBlank { RoleConfig.role.name }
@@ -174,15 +176,60 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** JPEG bytes of a job photo, fetched through the backend and cached. */
     suspend fun photoBytes(fileId: String): ByteArray? = repo.photoBytes(fileId)
 
-    /** AI conversion step: raw WhatsApp text -> job row (not yet saved). */
-    fun parseMessage(raw: String): Job {
-        val job = MessageParser.parse(
-            raw, createdBy = userName.ifBlank { RoleConfig.role.name }
-        ).job
-        // Rows converted from a WhatsApp message go through the same approval
-        // gate as a job raised on the form.
-        return if (RoleConfig.canApproveJobs) job
-        else job.copy(status = JobStatus.AWAITING_APPROVAL)
+    /**
+     * Pasted WhatsApp text -> draft jobs, one per unit mentioned, matched
+     * against the registered units and the service list. Nothing is saved
+     * until the drafts are confirmed with [createFromWhatsApp].
+     */
+    fun draftsFromWhatsApp(raw: String): List<MessageParser.Draft> =
+        MessageParser.drafts(
+            raw,
+            customers = customers.value,
+            apartments = apartments.value,
+            services = services.value
+        )
+
+    /**
+     * Raise every confirmed draft exactly as the form would: awaiting the
+     * admin's approval (or approved at once when the admin raises it), with
+     * its photos, and announced by the same notifications.
+     */
+    fun createFromWhatsApp(drafts: List<MessageParser.Draft>) {
+        drafts.forEach { d ->
+            createJob(d.unit, d.service, d.notes, d.photos, d.rooms, d.rawMessage)
+        }
+        _message.value = when {
+            drafts.size == 1 && RoleConfig.canApproveJobs -> "1 job created"
+            drafts.size == 1 -> "1 job sent to admin for approval"
+            RoleConfig.canApproveJobs -> "${drafts.size} jobs created"
+            else -> "${drafts.size} jobs sent to admin for approval"
+        }
+    }
+
+    // ---- staff code sign-in (Contractor app) ----
+
+    private val _signingIn = MutableStateFlow(false)
+    val signingIn: StateFlow<Boolean> = _signingIn
+
+    fun signIn(code: String) {
+        val trimmed = code.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            _signingIn.value = true
+            val error = repo.signIn(trimmed)
+            _signingIn.value = false
+            if (error != null) {
+                _message.value = error
+            } else {
+                _message.value = "Signed in as ${userName.ifBlank { RoleConfig.role.name }}"
+                sync()
+            }
+        }
+    }
+
+    fun signOut() {
+        repo.signOut()
+        _message.value = "Signed out"
     }
 
     fun saveJob(job: Job) {

@@ -6,6 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.jobregister.app.RoleConfig
 import com.jobregister.app.data.JobRepository
 import com.jobregister.app.util.Notifier
 import java.util.concurrent.TimeUnit
@@ -22,6 +23,8 @@ class JobWatchWorker(
 
     override suspend fun doWork(): Result {
         val repo = JobRepository.get(applicationContext)
+        // The Contractor app has nothing to watch until someone signs in.
+        if (!RoleConfig.signedIn) return Result.success()
         val error = repo.pull() ?: run {
             Notifier.notifyChanges(applicationContext, repo.changes.value)
             repo.clearChanges()

@@ -12,8 +12,8 @@ android {
         applicationId = "com.jobregister.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "2.6"
+        versionCode = 18
+        versionName = "2.7"
 
         // Built-in sync server: every APK ships pointing at the shared Job
         // Register backend, so phones sync with zero setup. Both values can
@@ -30,24 +30,24 @@ android {
             applicationIdSuffix = ".admin"
             resValue("string", "app_name", "MH Job Register Admin")
             buildConfigField("String", "ROLE", "\"ADMIN\"")
+            buildConfigField("boolean", "STAFF_CODE_LOGIN", "false")
         }
-        create("cleaner") {
+        // One app for every executor. The role (Cleaner or Repairer) is not
+        // compiled in: each person signs in with their own staff code from
+        // the Staff tab of the sheet, and the code decides the role.
+        create("contractor") {
             dimension = "role"
-            applicationIdSuffix = ".cleaner"
-            resValue("string", "app_name", "MH Job Register Cleaner")
-            buildConfigField("String", "ROLE", "\"CLEANER\"")
-        }
-        create("repairer") {
-            dimension = "role"
-            applicationIdSuffix = ".repairer"
-            resValue("string", "app_name", "MH Job Register Repairer")
-            buildConfigField("String", "ROLE", "\"REPAIRER\"")
+            applicationIdSuffix = ".contractor"
+            resValue("string", "app_name", "MH Job Register Contractor")
+            buildConfigField("String", "ROLE", "\"\"")
+            buildConfigField("boolean", "STAFF_CODE_LOGIN", "true")
         }
         create("initiator") {
             dimension = "role"
             applicationIdSuffix = ".initiator"
             resValue("string", "app_name", "MH Job Register Initiator")
             buildConfigField("String", "ROLE", "\"INITIATOR\"")
+            buildConfigField("boolean", "STAFF_CODE_LOGIN", "false")
         }
     }
 

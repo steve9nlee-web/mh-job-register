@@ -20,6 +20,11 @@ behaviour should change, change it here first, then in both tracks.
 | **Cleaner** | Does cleaning work | Approved cleaning jobs only | Start, photograph, complete; own pay |
 | **Repairer** | Does aircond / plumbing / pest / general work | Approved repair jobs only | Start, photograph, complete; own pay |
 
+Cleaner and Repairer are one app for the executors. Each person signs in
+with a personal **staff code** held in the `Staff` tab; the code's role
+decides whether they get cleaning or repair work, and their name goes on
+every update they make. Switching a code off signs that phone out.
+
 Hard rules:
 
 - A contractor **never** sees a job that has not been approved.
@@ -47,6 +52,17 @@ Initiator raises job ──► Awaiting approval ──► Admin approves ──
    is no separate upload step and no gallery picker. A "Job description &
    pricing" button sits directly under Create job and shows the unit, room,
    notes and the full price and scope of the chosen service.
+
+   **Or paste the WhatsApp message.** Admin and Initiator can paste one or
+   more copied WhatsApp messages instead of filling the form. The text is
+   read into one draft job per unit mentioned; a message that names no unit
+   joins the job before it. Each draft is pre-filled with the unit (only if it
+   is a registered unit — an unregistered one is shown, never invented), the
+   service from the Services list and the room, and is corrected on the same
+   dropdowns as the form. Photos can be taken per draft. Only when every draft
+   has a registered unit and a service can they be created, and each is then
+   raised exactly like a form job — same status, same approval gate, same
+   notifications. The pasted text is kept in `rawMessage`.
 2. **Approve.** Only the admin. On approval the job becomes `PENDING`,
    `approvedBy` and `approvedAt` are stamped, and it becomes visible to the
    trade that matches its category. An admin raising a job approves it in the
@@ -156,6 +172,11 @@ columns at the end and tolerate rows written before a column existed.
 - `Services`: `service`, `details`
 - `Customers`: `apartment`, `unit`, `service`, `customerName`, `phone`, `remarks`
 
+### `Staff` tab — one row per executor
+
+`code`, `role` (`CLEANER` or `REPAIRER`), `name`, `active` (`YES`/blank = on,
+`NO` = switched off). Created with one example code per trade on first use.
+
 ## 8. Photos
 
 - **Camera only.** Gallery uploads are not evidence of today's work.
@@ -199,6 +220,19 @@ Authenticated by a shared key on the query string: `?key=MH-SYNC-2026`.
   the photo in the folder for that kind and log it
 - `POST /exec?key=…` with `{type:"customer"|"apartment"|"service", …}` → edit
   the customer database
+- `GET /exec?key=…&login=<code>` → `{ role, name }` for a staff code, or
+  `{ error }`
+
+Any request that also carries `&staff=<code>` is the Contractor app, and is
+held to that person's role on the server, not just on the phone:
+
+- `GET` returns only approved jobs of their trade (and those jobs' photos),
+  with `customerCharge` blanked, no customer list, and `staff: { role, name }`.
+  An unknown or switched-off code gets `{ staff: null, jobs: [] }`.
+- `POST` of a job changes only `status`, `remarks`, `updatedBy`, `startedAt`
+  and `completedAt` of a job they can see. Anything else in the body is
+  ignored; creating jobs, `AWAITING_APPROVAL`, database edits and intake
+  photos are refused. Photo posts must be `before` or `after`.
 
 ## 11. Non-functional expectations
 

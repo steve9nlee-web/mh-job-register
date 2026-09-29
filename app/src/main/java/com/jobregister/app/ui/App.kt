@@ -44,14 +44,14 @@ enum class Tab(val label: String, val icon: ImageVector) {
     SETTINGS("Settings", Icons.Filled.Settings)
 }
 
-/** Which bottom tabs each APK ships with — the per-role information boundary. */
-val roleTabs: List<Tab> = when (RoleConfig.role) {
+/** Which bottom tabs each role gets — the per-role information boundary. */
+fun roleTabs(): List<Tab> = when (RoleConfig.role) {
     Role.ADMIN -> listOf(Tab.NEW_JOB, Tab.REGISTER, Tab.REVIEW, Tab.BILLING, Tab.PAYABLE)
     Role.CLEANER, Role.REPAIRER -> listOf(Tab.REGISTER, Tab.PAYABLE, Tab.SETTINGS)
     Role.INITIATOR -> listOf(Tab.NEW_JOB, Tab.REGISTER, Tab.SETTINGS)
 }
 
-private val roleColor: Color = when (RoleConfig.role) {
+private fun roleColor(): Color = when (RoleConfig.role) {
     Role.ADMIN -> Color(0xFF1565C0)      // blue
     Role.CLEANER -> Color(0xFF00796B)    // teal
     Role.REPAIRER -> Color(0xFFE65100)   // orange
@@ -60,8 +60,13 @@ private val roleColor: Color = when (RoleConfig.role) {
 
 @Composable
 fun App(vm: AppViewModel) {
-    MaterialTheme(colorScheme = lightColorScheme(primary = roleColor)) {
-        var currentTab by remember { mutableStateOf(roleTabs.first()) }
+    MaterialTheme(colorScheme = lightColorScheme(primary = roleColor())) {
+        // In the Contractor app the role can change on sign-in, so the tab
+        // list is worked out again whenever it does.
+        val role = RoleConfig.role
+        val signedIn = RoleConfig.signedIn
+        val tabs = remember(role) { roleTabs() }
+        var currentTab by remember(role) { mutableStateOf(tabs.first()) }
         var selectedJobId by remember { mutableStateOf<String?>(null) }
         var showSettings by remember { mutableStateOf(false) }
         var showCustomers by remember { mutableStateOf(false) }
@@ -75,9 +80,11 @@ fun App(vm: AppViewModel) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbar) },
             bottomBar = {
-                if (selectedJobId == null && !showSettings && !showCustomers && roleTabs.size > 1) {
+                if (signedIn && selectedJobId == null && !showSettings && !showCustomers &&
+                    tabs.size > 1
+                ) {
                     NavigationBar {
-                        roleTabs.forEach { tab ->
+                        tabs.forEach { tab ->
                             NavigationBarItem(
                                 selected = tab == currentTab,
                                 onClick = { currentTab = tab },
@@ -91,6 +98,7 @@ fun App(vm: AppViewModel) {
         ) { padding ->
             val content = Modifier.padding(padding)
             when {
+                !signedIn -> SignInScreen(vm, content)
                 showSettings -> SettingsScreen(vm, content) { showSettings = false }
                 showCustomers -> CustomersScreen(vm, content) { showCustomers = false }
                 selectedJobId != null -> JobDetailScreen(

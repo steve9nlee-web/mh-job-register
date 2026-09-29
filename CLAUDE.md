@@ -17,7 +17,7 @@ dependency of the other.
 | | Track A — Android apps | Track B — n8n |
 |---|---|---|
 | Status | Built and in use | To be built |
-| Front end | 4 Android APKs (Admin, Cleaner, Repairer, Initiator) | n8n forms / chat front door — still to be decided |
+| Front end | 3 Android APKs (Admin, Initiator, Contractor — staff code picks Cleaner or Repairer) | n8n forms / chat front door — still to be decided |
 | Logic | Kotlin in `app/` | n8n workflows in `n8n/` |
 | Backend | Apps Script `backend/Code.gs` | n8n HTTP + Google Sheets nodes |
 | Data | "MH Contractors Database" sheet + 2 Drive folders | **Its own copy** — see below |
@@ -36,7 +36,7 @@ workflow itself belongs in `SPEC.md` and then in both.
 - **Never run a local Gradle build.** `dl.google.com` is blocked in this
   environment, so the Android SDK cannot resolve. GitHub Actions is the
   compiler: push to `main`, and `.github/workflows/build-apks.yml` produces
-  four APKs in about three minutes. Check the run, read the failure log when it
+  three APKs in about three minutes. Check the run, read the failure log when it
   is red, fix, push again.
 - Before pushing Kotlin, check what can be checked without a compiler: brace
   and paren balance, that every new enum value is handled by the `when`s that

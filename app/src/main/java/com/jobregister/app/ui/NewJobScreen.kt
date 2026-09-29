@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.foundation.rememberScrollState
@@ -23,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,25 +36,35 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.jobregister.app.AppViewModel
-import com.jobregister.app.model.Job
+import com.jobregister.app.RoleConfig
+import com.jobregister.app.ai.MessageParser
 
 /**
- * WhatsApp Message -> AI Conversion -> Job Register rows.
- * Paste the daily group message; each non-empty line becomes one register row.
- * Rows missing a unit or category are flagged for admin review automatically.
+ * Two ways to raise a job, one workflow behind both:
+ *  - Pick unit: Apartment -> Unit -> Service -> Room -> notes -> photos.
+ *  - Paste WhatsApp: the message is read into one draft per unit mentioned,
+ *    each checked and corrected on the same dropdowns, then raised exactly as
+ *    the form raises a job — awaiting the admin's approval, with its photos,
+ *    and announced by the same notifications.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
-    var rawText by remember { mutableStateOf("") }
-    var parsed by remember { mutableStateOf<List<Job>>(emptyList()) }
+    var pasteMode by rememberSaveable { mutableStateOf(false) }
+    var rawText by rememberSaveable { mutableStateOf("") }
+    var drafts by remember { mutableStateOf<List<MessageParser.Draft>>(emptyList()) }
+    fun update(key: String, change: (MessageParser.Draft) -> MessageParser.Draft) {
+        drafts = drafts.map { if (it.key == key) change(it) else it }
+    }
 
     val customers by vm.customers.collectAsState()
     val apartments by vm.apartments.collectAsState()
@@ -67,6 +78,7 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
     var jobDesc by remember { mutableStateOf("") }
 
     var photos by remember { mutableStateOf<List<ByteArray>>(emptyList()) }
+    val clipboard = LocalClipboardManager.current
 
     Column(modifier.fillMaxSize()) {
         TopAppBar(
@@ -79,6 +91,19 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
         )
         LazyColumn(Modifier.padding(horizontal = 16.dp)) {
             item {
+                Row(Modifier.padding(top = 4.dp)) {
+                    FilterChip(
+                        selected = !pasteMode, onClick = { pasteMode = false },
+                        label = { Text("Pick unit") }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    FilterChip(
+                        selected = pasteMode, onClick = { pasteMode = true },
+                        label = { Text("Paste WhatsApp") }
+                    )
+                }
+            }
+            if (!pasteMode) item {
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         SectionHeader("Create job — pick a unit")
@@ -214,65 +239,158 @@ fun NewJobScreen(vm: AppViewModel, modifier: Modifier) {
                         }
                     }
                 }
-
-                SectionHeader("Or paste the WhatsApp message")
-                Text(
-                    "Each line is converted into one Job Register row.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-                OutlinedTextField(
-                    value = rawText,
-                    onValueChange = { rawText = it },
-                    modifier = Modifier.fillMaxWidth().height(160.dp),
-                    placeholder = { Text("e.g.\n12/8 PV-12-03 cleaning done\nR-5-11 sink leaking, plumber tmr") }
-                )
-                Spacer(Modifier.height(8.dp))
-                Row {
-                    Button(
-                        onClick = {
-                            parsed = rawText.lines()
-                                .map { it.trim() }
-                                .filter { it.isNotBlank() }
-                                .map { vm.parseMessage(it) }
-                        },
-                        enabled = rawText.isNotBlank()
-                    ) { Text("Convert with AI") }
-                    Spacer(Modifier.width(12.dp))
-                    if (parsed.isNotEmpty()) {
-                        Button(onClick = {
-                            parsed.forEach { vm.saveJob(it) }
-                            parsed = emptyList()
-                            rawText = ""
-                        }) { Text("Save ${parsed.size} row(s)") }
+            }
+            if (pasteMode) item {
+                Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        SectionHeader("Paste the WhatsApp message")
+                        Text(
+                            "In WhatsApp, long-press the message (tap more to pick several), " +
+                                "tap Copy, then paste it here. Each unit mentioned becomes one job.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedButton(onClick = {
+                            clipboard.getText()?.text?.takeIf { it.isNotBlank() }?.let {
+                                rawText = it
+                                drafts = vm.draftsFromWhatsApp(it)
+                            }
+                        }) { Text("📋 Paste from WhatsApp") }
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = rawText,
+                            onValueChange = { rawText = it },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                            placeholder = {
+                                Text("e.g.\n[29/09, 10:15] Mdm Tan: L-19-11 cleaning 2 rooms\n" +
+                                    "OV-26-10 aircon not cold")
+                            }
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row {
+                            Button(
+                                onClick = { drafts = vm.draftsFromWhatsApp(rawText) },
+                                enabled = rawText.isNotBlank()
+                            ) { Text("Read message") }
+                            Spacer(Modifier.width(8.dp))
+                            if (rawText.isNotBlank() || drafts.isNotEmpty()) {
+                                TextButton(onClick = { rawText = ""; drafts = emptyList() }) {
+                                    Text("Clear")
+                                }
+                            }
+                        }
+                        if (customers.isEmpty()) {
+                            Text(
+                                "No customer list loaded yet — tap the sync icon (top right) " +
+                                    "so units can be recognised.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFC62828)
+                            )
+                        }
                     }
-                }
-                if (parsed.isNotEmpty()) {
-                    SectionHeader("Preview — Job Register rows")
                 }
             }
-            items(parsed, key = { it.id }) { job ->
-                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(
-                            "${if (job.unit.isBlank()) "Unit ?" else job.unit} · ${job.category.label}",
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text("${job.date} · ${job.status.label}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = statusColor(job.status))
-                        Text(job.description, style = MaterialTheme.typography.bodyMedium)
-                        if (job.needsReview) {
-                            Text("⚑ Needs review: ${job.reviewReason}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFC62828))
+            if (pasteMode && drafts.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        if (drafts.size == 1) "1 job found — check it" else "${drafts.size} jobs found — check each one"
+                    )
+                }
+                val unitOptions = customers.map { it.unit }.distinct().sorted()
+                val serviceOptions = services.ifEmpty {
+                    listOf("Cleaning", "AirCond Service", "Pest Control", "General")
+                }
+                val roomOptions = listOf("Not applicable", "Room 1", "Room 2", "Room 3", "Room All")
+                itemsIndexed(drafts, key = { _, d -> d.key }) { index, draft ->
+                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text("Job ${index + 1}", fontWeight = FontWeight.Bold)
+                            when {
+                                draft.unit.isNotBlank() -> Unit
+                                draft.unitHint.isNotBlank() -> Text(
+                                    "${draft.unitHint} is not a registered unit — pick the right " +
+                                        "one, or ask the admin to add it first.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFC62828)
+                                )
+                                else -> Text(
+                                    "No unit found in this message — pick one.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFC62828)
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            DropdownField("Unit", unitOptions, draft.unit) { i ->
+                                update(draft.key) { it.copy(unit = unitOptions[i], unitHint = "") }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            DropdownField("Service", serviceOptions, draft.service) { i ->
+                                update(draft.key) { it.copy(service = serviceOptions[i]) }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            DropdownField("Room", roomOptions, draft.rooms) { i ->
+                                update(draft.key) { it.copy(rooms = if (i == 0) "" else roomOptions[i]) }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = draft.notes,
+                                onValueChange = { v -> update(draft.key) { it.copy(notes = v) } },
+                                label = { Text("Notes") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            PhotoPickerButtons(
+                                takeLabel = if (draft.photos.isEmpty()) "📷 Take photo"
+                                    else "📷 Take another"
+                            ) { picked -> update(draft.key) { it.copy(photos = it.photos + picked) } }
+                            if (draft.photos.isNotEmpty()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        "✓ ${draft.photos.size} photo(s)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(onClick = {
+                                        update(draft.key) { it.copy(photos = emptyList()) }
+                                    }) { Text("Remove photos") }
+                                }
+                            }
+                            TextButton(onClick = {
+                                drafts = drafts.filterNot { it.key == draft.key }
+                            }) { Text("Don't create this one") }
                         }
-                        OutlinedButton(
-                            onClick = { parsed = parsed.filterNot { it.id == job.id } },
-                            modifier = Modifier.padding(top = 4.dp)
-                        ) { Text("Remove") }
                     }
+                }
+                item {
+                    val allReady = drafts.all { it.ready }
+                    Spacer(Modifier.height(8.dp))
+                    if (!allReady) {
+                        Text(
+                            "Every job needs a registered unit and a service before it can be created.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFC62828)
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            vm.createFromWhatsApp(drafts)
+                            drafts = emptyList()
+                            rawText = ""
+                        },
+                        enabled = allReady,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (drafts.size == 1) "Create 1 job" else "Create ${drafts.size} jobs")
+                    }
+                    Text(
+                        if (RoleConfig.canApproveJobs) "You are the admin, so these are approved as they are created."
+                        else "They go to the admin for approval, like any other new job.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
             item { Spacer(Modifier.height(24.dp)) }

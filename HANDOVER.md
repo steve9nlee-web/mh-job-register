@@ -57,11 +57,11 @@ before work, after work — with empty groups still showing their heading.
 
 | Piece | What it is | Who owns it |
 |---|---|---|
-| 4 Android apps | Kotlin + Jetpack Compose, one APK per role from one codebase (`app/`) | This repo |
+| 3 Android apps | Kotlin + Jetpack Compose from one codebase (`app/`): Admin, Initiator, and one Contractor app where a staff code picks Cleaner or Repairer | This repo |
 | Backend | Google Apps Script web app (`backend/Code.gs`) over the spreadsheet | Steven's Google account |
-| Database | Google Sheet "MH Contractors Database", 5 tabs | Steven's Google account |
+| Database | Google Sheet "MH Contractors Database", 6 tabs (incl. `Staff` codes) | Steven's Google account |
 | Photo storage | Two Google Drive folders, intake and work photos kept apart | Steven's Google account |
-| Build | GitHub Actions, four APKs per push to `main` | This repo |
+| Build | GitHub Actions, three APKs per push to `main` | This repo |
 | Notifications | Android WorkManager polling, per-role rules | In the apps |
 
 Running cost today: nothing. Google Sheets, Drive and Apps Script are free at
@@ -84,7 +84,7 @@ Both can still be overridden per phone in Settings.
 
 ## 5. The two operations that matter
 
-**Ship an app change.** Push to `main`; Actions builds four APKs in about three
+**Ship an app change.** Push to `main`; Actions builds three APKs in about three
 minutes; download from the run page and install. Bump `versionCode` and
 `versionName` first so the phones can be told apart.
 
@@ -114,6 +114,18 @@ neither. Edit the sheet; the phones pick it up on the next sync.
   and a 3-room Set A price the same until it is taught the room bands.
 - **Release APKs are debug-signed.** Fine for sideloading, not for Play Store.
 
+## 6a. Added in v2.7
+
+- **Paste WhatsApp** on the New Job screen (Initiator and Admin): copied
+  messages become one draft job per unit, checked against registered units
+  and the Services list, with photos per draft, then raised through the
+  normal approval gate and notifications.
+- **One Contractor app** replaces the Cleaner and Repairer APKs. Each person
+  signs in with a code from the `Staff` tab; the server holds a code to its
+  trade's approved jobs, hides customer prices, and only accepts status
+  fields and before/after photos from it. The shared sync key still gives
+  the Admin and Initiator apps full access, as before.
+
 ## 7. The obvious next moves
 
 1. Assign a job to a named contractor, not just a trade.
@@ -127,7 +139,7 @@ neither. Edit the sheet; the phones pick it up on the next sync.
 Point a new session at `steve9nlee-web/mh-job-register` and open with something
 like:
 
-> This repo runs a property maintenance job system: four Android apps over a
+> This repo runs a property maintenance job system: three Android apps over a
 > Google Sheet, live and in daily use at v2.6. Read CLAUDE.md, SPEC.md and
 > HANDOVER.md first. I want to change <X>. Follow the existing build and
 > deployment rules, and tell me plainly what I need to do on my side.

@@ -22,6 +22,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Restore the Contractor app's signed-in role before the UI reads it.
+        RoleConfig.load(this)
         Notifier.ensureChannel(this)
         requestNotificationPermission()
         // Check the register in the background so updates arrive while the

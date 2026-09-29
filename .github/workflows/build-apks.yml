@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - claude/multi-apk-contractor-types-joinu5
+      - claude/modest-mayer-r1kms0
       - main
   workflow_dispatch:
 
@@ -24,7 +25,7 @@ jobs:
         with:
           gradle-version: '8.14.3'
 
-      - name: Build all four APKs
+      - name: Build all three APKs
         run: gradle --no-daemon assembleRelease
 
       - name: Upload Admin APK
@@ -33,17 +34,11 @@ jobs:
           name: JobRegister-Admin
           path: app/build/outputs/apk/admin/release/*.apk
 
-      - name: Upload Cleaner APK
+      - name: Upload Contractor APK
         uses: actions/upload-artifact@v4
         with:
-          name: JobRegister-Cleaner
-          path: app/build/outputs/apk/cleaner/release/*.apk
-
-      - name: Upload Repairer APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: JobRegister-Repairer
-          path: app/build/outputs/apk/repairer/release/*.apk
+          name: JobRegister-Contractor
+          path: app/build/outputs/apk/contractor/release/*.apk
 
       - name: Upload Initiator APK
         uses: actions/upload-artifact@v4

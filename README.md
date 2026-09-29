@@ -1,25 +1,25 @@
 # MH Job Register — Role-Based Android Apps
 
-One Android codebase that builds **four separate APKs**, one per role. Every
+One Android codebase that builds **three separate APKs**. Every
 app follows the same WhatsApp → billing workflow, but each APK only shows the
 steps and information that role needs.
 
 | APK | Who installs it | What they see |
 |---|---|---|
 | **MH Job Register Admin** (blue) | You / office admin | Everything: full job register, AI-flag review, status updates, rate card matching, customer billing, cleaner & repairer payment summaries, invoice/payment tracking, follow-up list |
-| **MH Job Register Cleaner** (teal) | Cleaning contractors | Only cleaning jobs, status update + remarks, their own pay. **No customer prices** |
-| **MH Job Register Repairer** (orange) | Repair contractors (plumbing, electrical, aircon, general) | Only repair jobs, status update + remarks, their own pay. **No customer prices** |
-| **MH Job Register Initiator** (purple) | Whoever posts the daily WhatsApp message | Paste WhatsApp message → AI conversion into register rows, job status tracking, pending follow-up list. **No money information at all** |
+| **MH Job Register Contractor** (teal / orange) | Every cleaner and repairer | Signs in with a personal staff code from the `Staff` tab. A CLEANER code shows only cleaning jobs, a REPAIRER code only repair jobs (plumbing, electrical, aircon, general): status update + remarks, their own pay. **No customer prices** — enforced by the server, not just the phone |
+| **MH Job Register Initiator** (purple) | Whoever posts the daily WhatsApp message | Raise jobs from the form or by pasting WhatsApp messages (one draft job per unit, checked against registered units and services), job status tracking, pending follow-up list. **No money information at all** |
 
-All four install side by side on one phone (different application IDs), so you
+All three install side by side on one phone (different application IDs), so you
 can test them together.
 
 ## Workflow coverage
 
 ```
-WhatsApp Message        → Initiator / Admin: paste into "New Job"
-AI Conversion           → On-device parser: normalize dates, find unit number,
-                          classify category (typo-tolerant), detect pending/completed
+WhatsApp Message        → Initiator / Admin: "New Job" → Paste WhatsApp
+Message → draft jobs    → On-device parser: one draft per unit, matched to registered
+                          units, Services list and room; confirmed, then raised
+                          through the same approval gate as the form
 Job Register            → Shared spreadsheet (Google Sheets via Apps Script)
 Human Review / AI Flags → Admin "Review" tab: rows with missing info are flagged
 Status Update           → Admin + contractors on their own jobs
@@ -36,11 +36,11 @@ The per-role visibility rules live in one file:
 ## Getting the APKs
 
 Every push to this branch runs the **Build role APKs** GitHub Actions workflow,
-which compiles all four APKs.
+which compiles all three APKs.
 
 1. Open the repo on GitHub → **Actions** tab → latest "Build role APKs" run.
-2. Download the artifacts: `JobRegister-Admin`, `JobRegister-Cleaner`,
-   `JobRegister-Repairer`, `JobRegister-Initiator`.
+2. Download the artifacts: `JobRegister-Admin`, `JobRegister-Contractor`,
+   `JobRegister-Initiator`.
 3. Copy each APK to the right person's phone and install (allow "install from
    unknown sources"). The APKs are debug-signed — fine for internal use, but
    replace the signing config in `app/build.gradle.kts` before any Play Store
@@ -49,7 +49,7 @@ which compiles all four APKs.
 To build locally instead (needs Android SDK + JDK 17):
 
 ```
-gradle assembleRelease        # all four
+gradle assembleRelease        # all three
 gradle assembleAdminRelease   # just one flavor
 ```
 
@@ -83,7 +83,7 @@ email. Setup guide: [`n8n/README.md`](n8n/README.md).
 
 ```
 app/                     Android app (Kotlin + Jetpack Compose)
-  build.gradle.kts       4 product flavors: admin / cleaner / repairer / initiator
+  build.gradle.kts       3 product flavors: admin / contractor / initiator
   src/main/java/com/jobregister/app/
     RoleConfig.kt        per-role visibility rules (the information boundary)
     ai/MessageParser.kt  WhatsApp text → job row (the "AI conversion" step)
@@ -91,5 +91,5 @@ app/                     Android app (Kotlin + Jetpack Compose)
     ui/                  screens; each gated through RoleConfig
 backend/Code.gs          Google Apps Script: spreadsheet ↔ JSON API
 n8n/                     alternative backend as importable n8n workflows
-.github/workflows/       CI that builds the 4 APKs on every push
+.github/workflows/       CI that builds the 3 APKs on every push
 ```

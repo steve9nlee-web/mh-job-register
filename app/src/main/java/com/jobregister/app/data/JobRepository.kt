@@ -2,11 +2,13 @@ package com.jobregister.app.data
 
 import android.content.Context
 import com.jobregister.app.BuildConfig
+import com.jobregister.app.RoleConfig
 import com.jobregister.app.model.Customer
 import com.jobregister.app.model.Job
 import com.jobregister.app.model.JobCategory
 import com.jobregister.app.model.JobStatus
 import com.jobregister.app.model.RateCard
+import com.jobregister.app.model.Role
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray
@@ -20,6 +22,7 @@ import java.time.LocalDate
  */
 class JobRepository(context: Context) {
 
+    private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("job_register", Context.MODE_PRIVATE)
 
     private val _jobs = MutableStateFlow<List<Job>>(emptyList())
@@ -64,7 +67,9 @@ class JobRepository(context: Context) {
         set(value) { prefs.edit().putString("user_name", value.trim()).apply() }
 
     init {
-        _jobs.value = loadLocal() ?: sampleJobs()
+        RoleConfig.load(appContext)
+        // The Contractor app starts empty: its jobs arrive after sign-in.
+        _jobs.value = loadLocal() ?: if (RoleConfig.usesStaffCode) emptyList() else sampleJobs()
         loadDirectory()
         persist()
     }
@@ -145,8 +150,24 @@ class JobRepository(context: Context) {
     suspend fun pull(): String? {
         val url = syncUrl
         if (url.isBlank()) return "No sync URL set (Settings)"
+        if (!RoleConfig.signedIn) return "Sign in with your staff code first"
         return try {
-            val remote = SheetApi.fetchAll(url, syncKey)
+            val remote = SheetApi.fetchAll(url, syncKey, RoleConfig.staffCode)
+            when (val staff = remote.staff) {
+                is SheetApi.StaffCheck.Revoked -> {
+                    signOut()
+                    return "Your staff code is no longer active — ask the admin for a new one"
+                }
+                is SheetApi.StaffCheck.Valid -> {
+                    // The admin may have moved this person to the other trade.
+                    val role = roleNamed(staff.role)
+                    if (role != null && role != RoleConfig.role) {
+                        RoleConfig.signIn(appContext, RoleConfig.staffCode, role)
+                    }
+                    if (staff.name.isNotBlank()) userName = staff.name
+                }
+                is SheetApi.StaffCheck.NotChecked -> Unit
+            }
             _changes.value = detectChanges(remote.jobs)
             val remoteIds = remote.jobs.map { it.id }.toSet()
             _jobs.value = remote.jobs + _jobs.value.filterNot { it.id in remoteIds }
@@ -168,7 +189,7 @@ class JobRepository(context: Context) {
         val url = syncUrl
         if (url.isBlank()) return null // local-only mode is fine
         return try {
-            SheetApi.upsertJob(url, syncKey, job); null
+            SheetApi.upsertJob(url, syncKey, job, RoleConfig.staffCode); null
         } catch (e: Exception) {
             e.message ?: "Push failed"
         }
@@ -213,7 +234,7 @@ class JobRepository(context: Context) {
         synchronized(photoCache) { photoCache[fileId] }?.let { return it }
         val url = syncUrl
         if (url.isBlank()) return null
-        val bytes = SheetApi.fetchPhoto(url, syncKey, fileId) ?: return null
+        val bytes = SheetApi.fetchPhoto(url, syncKey, fileId, RoleConfig.staffCode) ?: return null
         synchronized(photoCache) {
             photoCache[fileId] = bytes
             while (photoCache.size > 12) {
@@ -227,7 +248,7 @@ class JobRepository(context: Context) {
         val url = syncUrl
         if (url.isBlank()) return null
         return try {
-            SheetApi.postAction(url, syncKey, body); null
+            SheetApi.postAction(url, syncKey, body, RoleConfig.staffCode); null
         } catch (e: Exception) {
             e.message ?: "Push failed"
         }
@@ -262,6 +283,53 @@ class JobRepository(context: Context) {
     }
 
     fun clearChanges() { _changes.value = emptyList() }
+
+    // ---- staff code sign-in (Contractor app) ----
+
+    private fun roleNamed(name: String): Role? =
+        Role.entries.firstOrNull { it.name.equals(name.trim(), ignoreCase = true) }
+            ?.takeIf { it in RoleConfig.staffRoles }
+
+    /**
+     * Check [code] against the Staff tab and, if it belongs to a cleaner or a
+     * repairer, switch this phone to that role. Returns an error or null.
+     */
+    suspend fun signIn(code: String): String? {
+        val url = syncUrl
+        if (url.isBlank()) return "No sync URL set"
+        val member = try {
+            SheetApi.login(url, syncKey, code)
+        } catch (e: Exception) {
+            return e.message ?: "Sign-in failed"
+        }
+        val role = roleNamed(member.role)
+            ?: return "This code is for ${member.role.ifBlank { "another role" }.lowercase()}, " +
+                "not for the contractor app"
+        forgetJobs()
+        RoleConfig.signIn(appContext, code, role)
+        userName = member.name
+        return null
+    }
+
+    /** Leave the phone as it was before anyone signed in. */
+    fun signOut() {
+        RoleConfig.signOut(appContext)
+        forgetJobs()
+        userName = ""
+    }
+
+    /**
+     * Drop the previous person's jobs, and make the next sync silent so a new
+     * sign-in does not announce the whole back catalogue.
+     */
+    private fun forgetJobs() {
+        _jobs.value = emptyList()
+        _photos.value = emptyList()
+        _changes.value = emptyList()
+        synchronized(photoCache) { photoCache.clear() }
+        prefs.edit().remove("seen_status").apply()
+        persist()
+    }
 
     // ---- local persistence ----
 

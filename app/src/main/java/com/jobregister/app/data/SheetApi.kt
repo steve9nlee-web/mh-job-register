@@ -19,6 +19,10 @@ import java.net.URLEncoder
  *
  * GET  <url>            -> {"jobs":[{...}, ...]}
  * POST <url> {job json} -> upserts one row by ID
+ * GET  <url>&login=CODE -> {"role":"CLEANER","name":"Ali"} for a staff code
+ *
+ * The Contractor APK adds its staff code (&staff=CODE) to every request; the
+ * backend then only returns and accepts what that person's role allows.
  */
 object SheetApi {
 
@@ -28,8 +32,21 @@ object SheetApi {
         val apartments: Map<String, String>,
         val services: List<String>,
         val serviceDetails: Map<String, String> = emptyMap(),
-        val photos: List<JobPhoto> = emptyList()
+        val photos: List<JobPhoto> = emptyList(),
+        val staff: StaffCheck = StaffCheck.NotChecked
     )
+
+    /** What the backend said about the staff code sent with a pull. */
+    sealed class StaffCheck {
+        /** No code was sent, or the backend predates staff codes. */
+        data object NotChecked : StaffCheck()
+        data class Valid(val role: String, val name: String) : StaffCheck()
+        /** The code has been removed or switched off in the Staff tab. */
+        data object Revoked : StaffCheck()
+    }
+
+    /** The person a staff code belongs to, as held in the Staff tab. */
+    data class StaffMember(val role: String, val name: String)
 
     /** One row of the Photos tab: a job photo held in the shared Drive folder. */
     data class JobPhoto(
@@ -41,8 +58,9 @@ object SheetApi {
         val kind: String = "job"     // "job", "before" or "after"
     )
 
-    suspend fun fetchAll(baseUrl: String, key: String = ""): RemoteData = withContext(Dispatchers.IO) {
-        val conn = open(withKey(baseUrl, key), "GET")
+    suspend fun fetchAll(baseUrl: String, key: String = "", staffCode: String = ""): RemoteData =
+        withContext(Dispatchers.IO) {
+        val conn = open(withKey(baseUrl, key, staffCode), "GET")
         try {
             val body = conn.inputStream.bufferedReader().readText()
             val obj = JSONObject(body)
@@ -99,42 +117,79 @@ object SheetApi {
                 )
             }.filter { it.jobId.isNotBlank() && it.fileId.isNotBlank() }
 
-            RemoteData(jobs, customers, apartments, services, serviceDetails, photos)
+            val staff = when {
+                staffCode.isBlank() || !obj.has("staff") -> StaffCheck.NotChecked
+                obj.isNull("staff") -> StaffCheck.Revoked
+                else -> obj.getJSONObject("staff").let {
+                    StaffCheck.Valid(it.optString("role"), it.optString("name"))
+                }
+            }
+
+            RemoteData(jobs, customers, apartments, services, serviceDetails, photos, staff)
         } finally {
             conn.disconnect()
         }
     }
 
-    suspend fun upsertJob(baseUrl: String, key: String, job: Job): Unit = withContext(Dispatchers.IO) {
-        val conn = open(withKey(baseUrl, key), "POST")
+    /**
+     * Check a staff code against the Staff tab. Returns who it belongs to,
+     * or throws with a message fit to show on the sign-in screen.
+     */
+    suspend fun login(baseUrl: String, key: String, code: String): StaffMember =
+        withContext(Dispatchers.IO) {
+            val keyed = withKey(baseUrl, key)
+            val url = keyed + (if ("?" in keyed) "&" else "?") +
+                "login=" + URLEncoder.encode(code, "UTF-8")
+            val conn = open(url, "GET")
+            try {
+                val obj = JSONObject(conn.inputStream.bufferedReader().readText())
+                if (obj.has("error")) throw IllegalStateException(obj.getString("error"))
+                // A backend without staff codes ignores ?login and returns
+                // the register instead — say so rather than sign anyone in.
+                if (!obj.has("role")) throw IllegalStateException(
+                    "The server has not been updated for staff codes yet. " +
+                        "Ask the admin to deploy the new backend."
+                )
+                StaffMember(obj.optString("role"), obj.optString("name"))
+            } finally {
+                conn.disconnect()
+            }
+        }
+
+    suspend fun upsertJob(baseUrl: String, key: String, job: Job, staffCode: String = ""): Unit =
+        withContext(Dispatchers.IO) {
+        val conn = open(withKey(baseUrl, key, staffCode), "POST")
         try {
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.outputStream.use { it.write(toJson(job).toString().toByteArray()) }
-            conn.inputStream.bufferedReader().readText() // drain / follow Apps Script redirect
+            // Drain (following the Apps Script redirect) and surface a refusal.
+            errorIn(conn.inputStream.bufferedReader().readText())
+                ?.let { throw IllegalStateException(it) }
         } finally {
             conn.disconnect()
         }
     }
 
     /** POST an arbitrary action body (customer/apartment/service changes). */
-    suspend fun postAction(baseUrl: String, key: String, body: JSONObject): Unit =
+    suspend fun postAction(baseUrl: String, key: String, body: JSONObject, staffCode: String = ""): Unit =
         withContext(Dispatchers.IO) {
-            val conn = open(withKey(baseUrl, key), "POST")
+            val conn = open(withKey(baseUrl, key, staffCode), "POST")
             try {
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
-                conn.inputStream.bufferedReader().readText()
+                errorIn(conn.inputStream.bufferedReader().readText())
+                    ?.let { throw IllegalStateException(it) }
             } finally {
                 conn.disconnect()
             }
         }
 
     /** Download one job photo through the web app. Returns the JPEG bytes. */
-    suspend fun fetchPhoto(baseUrl: String, key: String, fileId: String): ByteArray? =
+    suspend fun fetchPhoto(baseUrl: String, key: String, fileId: String, staffCode: String = ""): ByteArray? =
         withContext(Dispatchers.IO) {
-            val keyed = withKey(baseUrl, key)
+            val keyed = withKey(baseUrl, key, staffCode)
             val url = keyed + (if ("?" in keyed) "&" else "?") +
                 "photo=" + URLEncoder.encode(fileId, "UTF-8")
             val conn = open(url, "GET")
@@ -149,9 +204,23 @@ object SheetApi {
             }
         }
 
-    private fun withKey(baseUrl: String, key: String): String =
-        if (key.isBlank()) baseUrl
-        else baseUrl + (if ("?" in baseUrl) "&" else "?") + "key=" + URLEncoder.encode(key, "UTF-8")
+    /** The backend's {"error": "..."} message, if the reply is one. */
+    private fun errorIn(reply: String): String? = try {
+        JSONObject(reply).optString("error").takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun withKey(baseUrl: String, key: String, staffCode: String = ""): String {
+        var url = baseUrl
+        if (key.isNotBlank()) {
+            url += (if ("?" in url) "&" else "?") + "key=" + URLEncoder.encode(key, "UTF-8")
+        }
+        if (staffCode.isNotBlank()) {
+            url += (if ("?" in url) "&" else "?") + "staff=" + URLEncoder.encode(staffCode, "UTF-8")
+        }
+        return url
+    }
 
     private fun open(url: String, method: String): HttpURLConnection {
         val conn = URL(url).openConnection() as HttpURLConnection

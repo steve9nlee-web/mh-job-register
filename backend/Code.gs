@@ -33,6 +33,15 @@
  * Job photos are stored in the two Drive folders below and listed on a
  * "Photos" tab; the apps read them back through this same web app, so a
  * phone shows the picture without needing its own access to Drive.
+ *
+ * STAFF CODES (Contractor app)
+ * Cleaners and repairers share one Contractor app. Each person signs in with
+ * a code from the "Staff" tab (code | role | name | active); the role column
+ * (CLEANER or REPAIRER) decides which jobs their phone gets. Requests carrying
+ * a code (&staff=CODE) only see that trade's approved jobs, never customer
+ * prices, and may only move a job's status and add before/after photos.
+ * Set "active" to NO to switch a code off; that phone is signed out on its
+ * next sync.
  */
 
 // The Job Register spreadsheet ("MH Contractors Database"). All app data is
@@ -91,11 +100,19 @@ function badKey_() {
 /** GET -> all jobs as JSON. */
 function doGet(e) {
   if (!keyOk_(e)) return badKey_();
+  // ?login=<code> -> who that staff code belongs to, for the Contractor app.
+  if (e && e.parameter && e.parameter.login !== undefined) return login_(e.parameter.login);
+  // A request from the Contractor app carries its staff code; an unknown or
+  // switched-off code gets nothing but the news that it is no longer valid.
+  var staffParam = e && e.parameter ? e.parameter.staff : undefined;
+  var staff = staffParam ? contractorFor_(staffParam) : null;
+  if (staffParam && !staff) return json_({ staff: null, jobs: [] });
   // ?photo=<fileId> -> that photo as base64, so the apps can display it
   // without the viewer needing Google Drive access of their own.
   if (e && e.parameter && e.parameter.photo) return servePhoto_(e.parameter.photo);
   // Auto-create the customer database tabs on first use.
   if (!openSs_().getSheetByName(CUSTOMER_SHEET)) setupCustomerSheets();
+  if (!openSs_().getSheetByName(STAFF_SHEET)) staffSheet_();
   var sheet = getSheet_();
   var values = sheet.getDataRange().getValues();
   var jobs = [];
@@ -172,14 +189,31 @@ function doGet(e) {
     }
   }
 
-  return ContentService.createTextOutput(JSON.stringify({
+  var result = {
     jobs: jobs,
     customers: customers,
     apartments: apartments,
     services: services,
     serviceInfo: serviceInfo,
     photos: photos
-  })).setMimeType(ContentService.MimeType.JSON);
+  };
+  if (staff) {
+    // A contractor gets their own trade's approved jobs and nothing about
+    // what the customer is charged.
+    result.jobs = jobs.filter(function (j) { return jobVisibleTo_(j, staff); })
+      .map(function (j) { j.customerCharge = null; return j; });
+    var visible = {};
+    result.jobs.forEach(function (j) { visible[String(j.id)] = true; });
+    result.photos = photos.filter(function (p) { return visible[p.jobId]; });
+    result.customers = [];
+    result.staff = staff;
+  }
+  return json_(result);
+}
+
+function json_(o) {
+  return ContentService.createTextOutput(JSON.stringify(o))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function ok_() {
@@ -389,6 +423,8 @@ function ensureServicePackages_(sheet) {
 function doPost(e) {
   if (!keyOk_(e)) return badKey_();
   var data = JSON.parse(e.postData.contents);
+  var staffParam = e && e.parameter ? e.parameter.staff : undefined;
+  if (staffParam) return contractorPost_(contractorFor_(staffParam), data);
   if (data.type === 'photo') return handlePhoto_(data);
   if (data.type === 'customer') return handleCustomer_(data);
   if (data.type === 'apartment') return handleApartment_(data);
@@ -497,4 +533,121 @@ function setupCustomerSheets() {
     .setAllowInvalid(false)
     .build();
   cust.getRange('C2:C1000').setDataValidation(svcRule);
+
+  staffSheet_();
+}
+
+// ---------------------------------------------------------------------------
+// Staff codes — one Contractor app, the code decides the role
+// ---------------------------------------------------------------------------
+
+var STAFF_SHEET = 'Staff';
+var STAFF_HEADERS = ['code', 'role', 'name', 'active'];
+var CONTRACTOR_ROLES = ['CLEANER', 'REPAIRER'];
+// The only columns a contractor's update may change on a job row.
+var CONTRACTOR_FIELDS = ['status', 'remarks', 'updatedBy', 'startedAt', 'completedAt'];
+
+// The Staff tab, created with one example code per trade on first use.
+function staffSheet_() {
+  var ss = openSs_();
+  var sheet = ss.getSheetByName(STAFF_SHEET);
+  if (sheet) return sheet;
+  sheet = ss.insertSheet(STAFF_SHEET);
+  sheet.appendRow(STAFF_HEADERS);
+  sheet.appendRow([newStaffCode_('CL'), 'CLEANER', 'Cleaner 1', 'YES']);
+  sheet.appendRow([newStaffCode_('RP'), 'REPAIRER', 'Repairer 1', 'YES']);
+  sheet.setFrozenRows(1);
+  sheet.getRange('B2:B200').setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInList(CONTRACTOR_ROLES, true).setAllowInvalid(false).build());
+  sheet.getRange('D2:D200').setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInList(['YES', 'NO'], true).setAllowInvalid(true).build());
+  return sheet;
+}
+
+// A short code that is easy to read out over the phone, e.g. CL-7F3A9C.
+function newStaffCode_(prefix) {
+  return prefix + '-' + Utilities.getUuid().replace(/-/g, '').slice(0, 6).toUpperCase();
+}
+
+// The Staff row for a code: { role, name }, or null if unknown or switched off.
+// A blank "active" counts as on, so a newly typed row works straight away.
+function staffFor_(code) {
+  var wanted = String(code || '').trim().toUpperCase();
+  if (!wanted) return null;
+  var v = staffSheet_().getDataRange().getValues();
+  for (var r = 1; r < v.length; r++) {
+    if (String(v[r][0]).trim().toUpperCase() !== wanted) continue;
+    var active = String(v[r][3]).trim().toUpperCase();
+    if (active === 'NO' || active === 'N' || active === 'FALSE' || active === '0') return null;
+    return { role: String(v[r][1]).trim().toUpperCase(), name: String(v[r][2] || '').trim() };
+  }
+  return null;
+}
+
+// Like staffFor_, but only codes that belong to a cleaner or a repairer.
+function contractorFor_(code) {
+  var s = staffFor_(code);
+  return s && CONTRACTOR_ROLES.indexOf(s.role) >= 0 ? s : null;
+}
+
+function login_(code) {
+  var s = staffFor_(code);
+  if (!s) return json_({ error: 'Unknown or switched-off staff code' });
+  return json_(s);
+}
+
+function isCleaning_(category) {
+  var c = String(category || '').toUpperCase();
+  return c === 'CLEANING' || c === 'DEEP_CLEANING';
+}
+
+// SPEC §1: a contractor sees only approved jobs of their own trade.
+function jobVisibleTo_(job, staff) {
+  if (String(job.status) === 'AWAITING_APPROVAL') return false;
+  var c = String(job.category || '').toUpperCase();
+  if (staff.role === 'CLEANER') return isCleaning_(c);
+  if (staff.role === 'REPAIRER') return !isCleaning_(c) && c !== 'UNKNOWN' && c !== '';
+  return false;
+}
+
+// The job row for an id as an object, plus its sheet row number.
+function jobById_(id) {
+  var sheet = getSheet_();
+  var values = sheet.getDataRange().getValues();
+  for (var r = 1; r < values.length; r++) {
+    if (String(values[r][0]) === String(id)) {
+      var job = {};
+      for (var c = 0; c < HEADERS.length; c++) job[HEADERS[c]] = values[r][c];
+      return { sheet: sheet, row: r + 1, job: job };
+    }
+  }
+  return null;
+}
+
+// Everything the Contractor app may write: status fields on a job it can
+// see, and before/after photos of such a job. Prices and the rest of the
+// row are never touched, whatever the phone sends.
+function contractorPost_(staff, data) {
+  if (!staff) return json_({ error: 'Your staff code is no longer active' });
+  var jobId = data.type === 'photo' ? data.jobId : data.id;
+  var found = jobById_(jobId);
+  if (!found || !jobVisibleTo_(found.job, staff)) {
+    return json_({ error: 'That job is not assigned to your trade' });
+  }
+  if (data.type === 'photo') {
+    if (data.kind !== 'before' && data.kind !== 'after') {
+      return json_({ error: 'Contractors add before and after photos only' });
+    }
+    return handlePhoto_(data);
+  }
+  if (data.type) return json_({ error: 'Not allowed with a staff code' });
+  if (String(data.status) === 'AWAITING_APPROVAL') {
+    return json_({ error: 'Only the admin sets that status' });
+  }
+  CONTRACTOR_FIELDS.forEach(function (field) {
+    if (data[field] === undefined || data[field] === null) return;
+    var col = HEADERS.indexOf(field) + 1;
+    found.sheet.getRange(found.row, col).setValue(data[field]);
+  });
+  return ok_();
 }
