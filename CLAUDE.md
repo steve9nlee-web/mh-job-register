@@ -4,7 +4,9 @@ Property maintenance job management for MH Contractors: a job is raised for an
 apartment unit, approved, done by a contractor with photo evidence, then billed.
 
 **Read `SPEC.md` first.** It defines the workflow both implementations must
-satisfy, and it is the arbiter when the two disagree.
+satisfy, and it is the arbiter when the two disagree. `HANDOVER.md` is the
+current state of play: what is live, the keys and folder ids, the two
+deployment procedures, and the known rough edges.
 
 ## Two tracks, deliberately separate
 
